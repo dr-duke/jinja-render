@@ -20,11 +20,29 @@ FROM nginxinc/nginx-unprivileged:1.27-alpine
 USER root
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
-# Validate the nginx config at build time so a broken config fails the build
-# rather than silently producing a container that exits on startup.
-RUN nginx -t
+# Create the writable runtime dir for nginx's pid and temp files, owned by the
+# runtime user (uid 101). In Kubernetes this path is overlaid by a writable
+# emptyDir; for plain `docker run` it exists and is writable out of the box so
+# nginx starts without a mounted volume. The image's default main config points
+# `pid` at /tmp/nginx.pid; we relocate it to /tmp/nginx/nginx.pid via the CMD
+# `-g` global directive so pid and temp files share one writable mount.
+RUN mkdir -p \
+      /tmp/nginx \
+      /tmp/nginx/client_temp \
+      /tmp/nginx/proxy_temp \
+      /tmp/nginx/fastcgi_temp \
+      /tmp/nginx/uwsgi_temp \
+      /tmp/nginx/scgi_temp \
+    && chown -R 101:101 /tmp/nginx
 USER 101
+# Validate the nginx config at build time so a broken config fails the build
+# rather than silently producing a container that exits on startup. Run as the
+# runtime user (101) with the same pid override used at runtime so the temp/pid
+# paths are exercised exactly as in production.
+RUN nginx -t -g 'pid /tmp/nginx/nginx.pid;'
 # Serve on 8080 so the container can run as a non-root user without the
 # NET_BIND_SERVICE capability (see nginx.conf `listen 8080`).
 EXPOSE 8080
-CMD ["nginx", "-g", "daemon off;"]
+# Relocate the pid file (main-context directive, so it cannot live in the
+# conf.d/default.conf server block) into the writable /tmp/nginx mount.
+CMD ["nginx", "-g", "daemon off; pid /tmp/nginx/nginx.pid;"]

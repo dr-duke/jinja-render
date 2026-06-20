@@ -158,10 +158,14 @@ deployments:
     # Pod-level securityContext. The unprivileged nginx image owns its runtime
     # dirs (cache, pid) as uid 101, so the pod MUST run as 101 — override the
     # generic runAsUser (10001) here, otherwise nginx cannot write its pid/cache.
+    # fsGroup 101 makes the kernel chown the nginx-tmp emptyDir (below) to gid
+    # 101, so uid 101 can create its pid/temp files there even though an emptyDir
+    # is otherwise root-owned.
     securityContext:
       mergeWithGeneric: true
       runAsUser: 101
       runAsGroup: 101
+      fsGroup: 101
     containers:
       frontend:
         image: ghcr.io/dr-duke/jinja-render/frontend
@@ -175,8 +179,11 @@ deployments:
         imagePullPolicy: Always
         securityContext:
           mergeWithGeneric: true
-          # nginx writes cache/run dirs; keep root FS writable for the SPA image.
-          readOnlyRootFilesystem: false
+          # All nginx writes (pid + temp paths) are redirected to the writable
+          # nginx-tmp emptyDir mounted at /tmp/nginx (see nginx.conf and the
+          # volumeMounts/volumes below), so the root filesystem can stay
+          # read-only.
+          readOnlyRootFilesystem: true
         ports:
           # nginx listens on 8080 so the pod runs non-root without
           # NET_BIND_SERVICE (binding a port <1024 would require it).
@@ -201,16 +208,24 @@ deployments:
           limits:
             cpu: 250m
             memory: 128Mi
-        # Overlay just the single file with subPath so the rest of the served
-        # web root stays intact.
         volumeMounts:
+          # Writable scratch dir for nginx's pid and temp files. Required because
+          # the container's root FS is read-only (readOnlyRootFilesystem: true).
+          - name: nginx-tmp
+            mountPath: /tmp/nginx
+          # Overlay just the single CSS file with subPath so the rest of the
+          # served web root stays intact.
           - name: custom-css
             mountPath: /usr/share/nginx/html/custom.css
             subPath: custom.css
             readOnly: true
-    # The volume's configMap name is resolved through helpers.app.fullname using
-    # this .name, matching the "custom-css" entry under configMaps above.
     volumes:
+      # Ephemeral writable dir for nginx pid/temp; chowned to gid 101 by the
+      # pod-level fsGroup so the non-root nginx user can write to it.
+      - name: nginx-tmp
+        type: emptyDir
+      # The volume's configMap name is resolved through helpers.app.fullname
+      # using this .name, matching the "custom-css" entry under configMaps above.
       - name: custom-css
         type: configMap
 

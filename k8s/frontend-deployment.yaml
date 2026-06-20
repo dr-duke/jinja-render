@@ -22,6 +22,10 @@ spec:
         # uid 101 owns the runtime dirs in the unprivileged nginx base image
         # (nginxinc/nginx-unprivileged) the frontend Dockerfile builds on.
         runAsUser: 101
+        runAsGroup: 101
+        # fsGroup chowns the nginx-tmp emptyDir (below) to gid 101 so the
+        # non-root nginx user can write its pid/temp files into it.
+        fsGroup: 101
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -57,12 +61,18 @@ spec:
               memory: "128Mi"
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
+            # All nginx writes (pid + temp paths) go to the nginx-tmp emptyDir
+            # mounted at /tmp/nginx (see nginx.conf), so the root FS is read-only.
+            readOnlyRootFilesystem: true
             # nginx listens on 8080 (see nginx.conf), so binding needs no extra
             # capability — run fully non-root with all capabilities dropped.
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+            # Writable scratch dir for nginx's pid and temp files, required
+            # because the root filesystem is read-only.
+            - name: nginx-tmp
+              mountPath: /tmp/nginx
             # Mount the runtime CSS override over the served file. nginx returns
             # an empty no-op stylesheet if this is absent, so the mount is
             # optional and safe to omit.
@@ -71,6 +81,10 @@ spec:
               subPath: custom.css
               readOnly: true
       volumes:
+        # Ephemeral writable dir for nginx pid/temp; chowned to gid 101 via the
+        # pod-level fsGroup so the non-root nginx user can write to it.
+        - name: nginx-tmp
+          emptyDir: {}
         - name: custom-css
           configMap:
             name: jinja-render-custom-css

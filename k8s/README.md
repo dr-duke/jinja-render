@@ -15,7 +15,10 @@ runtime CSS override.
 - `frontend-deployment.yaml` — frontend `Deployment` + `Service`. Built on the
   unprivileged nginx image, it listens on container port **8080** as uid 101
   (runs fully non-root, no `NET_BIND_SERVICE`, no entrypoint writes to read-only
-  paths); the Service exposes port 80 → targetPort 8080. Mounts the `custom.css`
+  paths); the Service exposes port 80 → targetPort 8080. Runs with a **read-only
+  root filesystem**: nginx's pid and temp files are redirected to a writable
+  `nginx-tmp` `emptyDir` mounted at `/tmp/nginx` (the pod's `fsGroup: 101` makes
+  that volume writable by the non-root user). Also mounts the `custom.css`
   ConfigMap over `/usr/share/nginx/html/custom.css`.
 
 ## Build and load images
@@ -163,6 +166,34 @@ helm upgrade --install jinja-render \
 A new immutable tag changes the pod spec, so Kubernetes always rolls out and
 pulls the right image regardless of pull policy.
 
+### Troubleshooting: nginx pid/temp permission errors
+
+If the frontend pod crash-loops with a log line like:
+
+```
+nginx: [emerg] open() "/tmp/nginx.pid" failed (13: Permission denied)
+```
+
+nginx cannot write its pid or temp files because the root filesystem is
+read-only and the writable scratch dir is missing or not owned by the runtime
+user. The fix is already baked into these manifests:
+
+- nginx writes pid + temp files only under `/tmp/nginx` (pid via the Dockerfile
+  `CMD -g 'pid /tmp/nginx/nginx.pid;'`; temp paths via `nginx.conf`);
+- a writable `nginx-tmp` `emptyDir` is mounted at `/tmp/nginx`;
+- the pod sets `fsGroup: 101` so that emptyDir is group-writable by uid 101.
+
+If you adapt these manifests and hit this error, verify all three are present.
+A quick check on a running pod:
+
+```bash
+kubectl -n jinja-render exec deploy/jinja-render-frontend -- sh -c \
+  'nginx -T | grep -E "pid|temp_path"; ls -ld /tmp/nginx'
+```
+
+`/tmp/nginx` should be writable by gid 101, and the pid should resolve to
+`/tmp/nginx/nginx.pid`.
+
 ## Runtime CSS override
 
 `index.html` always loads `/custom.css` last, so it overrides bundled styles.
@@ -187,13 +218,16 @@ All backend runtime config is supplied via the `jinja-render-config` ConfigMap
   (e.g. Redis-backed) counter.
 - **ansible hostfacts are static and fabricated** — real host facts are never
   gathered.
-- **Frontend port 8080 / non-root.** The frontend is built on
-  `nginxinc/nginx-unprivileged`, which binds 8080 as uid 101 and writes its
-  cache/pid to user-owned paths — so the pod runs fully non-root with all
-  capabilities dropped (no `NET_BIND_SERVICE`) and without the stock image's
-  entrypoint failing on a read-only root FS. The pod securityContext therefore
-  pins `runAsUser: 101` (the chart's generic `runAsUser: 10001` is overridden
-  for the frontend only). The Service still exposes port 80 (targetPort 8080).
+- **Frontend port 8080 / non-root / read-only root FS.** The frontend is built
+  on `nginxinc/nginx-unprivileged`, which binds 8080 as uid 101 — so the pod runs
+  fully non-root with all capabilities dropped (no `NET_BIND_SERVICE`). The pod
+  securityContext pins `runAsUser: 101` (the chart's generic `runAsUser: 10001`
+  is overridden for the frontend only) plus `fsGroup: 101`. The container runs
+  with `readOnlyRootFilesystem: true`; nginx's pid (`/tmp/nginx/nginx.pid`, set
+  via the Dockerfile `CMD -g 'pid ...'`) and its temp paths (set in
+  `nginx.conf`, e.g. `proxy_temp_path /tmp/nginx/proxy_temp`) all live under a
+  writable `nginx-tmp` `emptyDir` mounted at `/tmp/nginx`. The Service still
+  exposes port 80 (targetPort 8080).
 - **Raw manifests omit Ingress, TLS, HPA/autoscaling, NetworkPolicies, and
   PodDisruptionBudgets** — add them per your cluster's standards. The Nixys chart
   values file (above) does define an Ingress for the frontend.
