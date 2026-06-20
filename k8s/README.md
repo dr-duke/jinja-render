@@ -16,10 +16,11 @@ runtime CSS override.
   unprivileged nginx image, it listens on container port **8080** as uid 101
   (runs fully non-root, no `NET_BIND_SERVICE`, no entrypoint writes to read-only
   paths); the Service exposes port 80 → targetPort 8080. Runs with a **read-only
-  root filesystem**: nginx's pid and temp files are redirected to a writable
-  `nginx-tmp` `emptyDir` mounted at `/tmp/nginx` (the pod's `fsGroup: 101` makes
-  that volume writable by the non-root user). Also mounts the `custom.css`
-  ConfigMap over `/usr/share/nginx/html/custom.css`.
+  root filesystem**: nginx's pid (the image default `/tmp/nginx.pid`) and temp
+  files (`/tmp/nginx/*`) are kept on a writable `nginx-tmp` `emptyDir` mounted at
+  `/tmp` (the pod's `fsGroup: 101` makes that volume writable by the non-root
+  user). Also mounts the `custom.css` ConfigMap over
+  `/usr/share/nginx/html/custom.css`.
 
 ## Build and load images
 
@@ -178,9 +179,11 @@ nginx cannot write its pid or temp files because the root filesystem is
 read-only and the writable scratch dir is missing or not owned by the runtime
 user. The fix is already baked into these manifests:
 
-- nginx writes pid + temp files only under `/tmp/nginx` (pid via the Dockerfile
-  `CMD -g 'pid /tmp/nginx/nginx.pid;'`; temp paths via `nginx.conf`);
-- a writable `nginx-tmp` `emptyDir` is mounted at `/tmp/nginx`;
+- nginx keeps its pid at the image default `/tmp/nginx.pid` (NOT overridden —
+  the unprivileged image already declares `pid /tmp/nginx.pid;`, so re-setting
+  it via `-g` would be a duplicate-directive error) and writes temp files under
+  `/tmp/nginx` (temp paths set in `nginx.conf`);
+- a writable `nginx-tmp` `emptyDir` is mounted at `/tmp`, covering both;
 - the pod sets `fsGroup: 101` so that emptyDir is group-writable by uid 101.
 
 If you adapt these manifests and hit this error, verify all three are present.
@@ -188,11 +191,11 @@ A quick check on a running pod:
 
 ```bash
 kubectl -n jinja-render exec deploy/jinja-render-frontend -- sh -c \
-  'nginx -T | grep -E "pid|temp_path"; ls -ld /tmp/nginx'
+  'nginx -T | grep -E "pid|temp_path"; ls -ld /tmp'
 ```
 
-`/tmp/nginx` should be writable by gid 101, and the pid should resolve to
-`/tmp/nginx/nginx.pid`.
+`/tmp` should be writable by gid 101, and the pid should resolve to
+`/tmp/nginx.pid`.
 
 ## Runtime CSS override
 
@@ -223,11 +226,14 @@ All backend runtime config is supplied via the `jinja-render-config` ConfigMap
   fully non-root with all capabilities dropped (no `NET_BIND_SERVICE`). The pod
   securityContext pins `runAsUser: 101` (the chart's generic `runAsUser: 10001`
   is overridden for the frontend only) plus `fsGroup: 101`. The container runs
-  with `readOnlyRootFilesystem: true`; nginx's pid (`/tmp/nginx/nginx.pid`, set
-  via the Dockerfile `CMD -g 'pid ...'`) and its temp paths (set in
-  `nginx.conf`, e.g. `proxy_temp_path /tmp/nginx/proxy_temp`) all live under a
-  writable `nginx-tmp` `emptyDir` mounted at `/tmp/nginx`. The Service still
-  exposes port 80 (targetPort 8080).
+  with `readOnlyRootFilesystem: true`; nginx's pid (the base image's default
+  `/tmp/nginx.pid`) and its temp paths (set in `nginx.conf`, e.g.
+  `proxy_temp_path /tmp/nginx/proxy_temp`) all live under a writable `nginx-tmp`
+  `emptyDir` mounted at `/tmp`. The pid path is intentionally left at the image
+  default — the unprivileged image's main `nginx.conf` already declares
+  `pid /tmp/nginx.pid;`, so overriding it (e.g. via `-g 'pid ...'`) is a
+  duplicate-directive error; mounting the emptyDir at `/tmp` simply makes that
+  default path writable. The Service still exposes port 80 (targetPort 8080).
 - **Raw manifests omit Ingress, TLS, HPA/autoscaling, NetworkPolicies, and
   PodDisruptionBudgets** — add them per your cluster's standards. The Nixys chart
   values file (above) does define an Ingress for the frontend.

@@ -20,14 +20,15 @@ FROM nginxinc/nginx-unprivileged:1.27-alpine
 USER root
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
-# Create the writable runtime dir for nginx's pid and temp files, owned by the
-# runtime user (uid 101). In Kubernetes this path is overlaid by a writable
-# emptyDir; for plain `docker run` it exists and is writable out of the box so
-# nginx starts without a mounted volume. The image's default main config points
-# `pid` at /tmp/nginx.pid; we relocate it to /tmp/nginx/nginx.pid via the CMD
-# `-g` global directive so pid and temp files share one writable mount.
+# Create the writable temp dir for nginx's temp files, owned by the runtime user
+# (uid 101). In Kubernetes /tmp is overlaid by a writable emptyDir (so both the
+# image's default pid path /tmp/nginx.pid and these /tmp/nginx/* temp paths are
+# writable); for plain `docker run` these dirs exist and are writable out of the
+# box so nginx starts without any mounted volume. The pid path is NOT overridden
+# here — the unprivileged image's main nginx.conf already declares
+# `pid /tmp/nginx.pid;`, and re-declaring it via `-g` is a duplicate-directive
+# error. We keep that default and just make /tmp writable.
 RUN mkdir -p \
-      /tmp/nginx \
       /tmp/nginx/client_temp \
       /tmp/nginx/proxy_temp \
       /tmp/nginx/fastcgi_temp \
@@ -36,13 +37,9 @@ RUN mkdir -p \
     && chown -R 101:101 /tmp/nginx
 USER 101
 # Validate the nginx config at build time so a broken config fails the build
-# rather than silently producing a container that exits on startup. Run as the
-# runtime user (101) with the same pid override used at runtime so the temp/pid
-# paths are exercised exactly as in production.
-RUN nginx -t -g 'pid /tmp/nginx/nginx.pid;'
+# rather than silently producing a container that exits on startup.
+RUN nginx -t
 # Serve on 8080 so the container can run as a non-root user without the
 # NET_BIND_SERVICE capability (see nginx.conf `listen 8080`).
 EXPOSE 8080
-# Relocate the pid file (main-context directive, so it cannot live in the
-# conf.d/default.conf server block) into the writable /tmp/nginx mount.
-CMD ["nginx", "-g", "daemon off; pid /tmp/nginx/nginx.pid;"]
+CMD ["nginx", "-g", "daemon off;"]

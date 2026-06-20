@@ -179,10 +179,10 @@ deployments:
         imagePullPolicy: Always
         securityContext:
           mergeWithGeneric: true
-          # All nginx writes (pid + temp paths) are redirected to the writable
-          # nginx-tmp emptyDir mounted at /tmp/nginx (see nginx.conf and the
-          # volumeMounts/volumes below), so the root filesystem can stay
-          # read-only.
+          # All nginx writes go to the writable nginx-tmp emptyDir mounted at
+          # /tmp: the image's default pid file (/tmp/nginx.pid) and the temp
+          # paths under /tmp/nginx (see nginx.conf and the volumeMounts/volumes
+          # below), so the root filesystem can stay read-only.
           readOnlyRootFilesystem: true
         ports:
           # nginx listens on 8080 so the pod runs non-root without
@@ -209,10 +209,13 @@ deployments:
             cpu: 250m
             memory: 128Mi
         volumeMounts:
-          # Writable scratch dir for nginx's pid and temp files. Required because
-          # the container's root FS is read-only (readOnlyRootFilesystem: true).
+          # Writable scratch dir for nginx's pid (/tmp/nginx.pid) and temp files
+          # (/tmp/nginx/*). Mounted at /tmp so the image's default pid path is
+          # writable. Required because the container's root FS is read-only
+          # (readOnlyRootFilesystem: true). nginx auto-creates the *_temp
+          # subdirs at startup since the parent is writable.
           - name: nginx-tmp
-            mountPath: /tmp/nginx
+            mountPath: /tmp
           # Overlay just the single CSS file with subPath so the rest of the
           # served web root stays intact.
           - name: custom-css

@@ -61,18 +61,20 @@ spec:
               memory: "128Mi"
           securityContext:
             allowPrivilegeEscalation: false
-            # All nginx writes (pid + temp paths) go to the nginx-tmp emptyDir
-            # mounted at /tmp/nginx (see nginx.conf), so the root FS is read-only.
+            # All nginx writes (default pid /tmp/nginx.pid + temp paths under
+            # /tmp/nginx) go to the nginx-tmp emptyDir mounted at /tmp (see
+            # nginx.conf), so the root FS is read-only.
             readOnlyRootFilesystem: true
             # nginx listens on 8080 (see nginx.conf), so binding needs no extra
             # capability — run fully non-root with all capabilities dropped.
             capabilities:
               drop: ["ALL"]
           volumeMounts:
-            # Writable scratch dir for nginx's pid and temp files, required
-            # because the root filesystem is read-only.
+            # Writable scratch dir for nginx's pid (/tmp/nginx.pid) and temp
+            # files (/tmp/nginx/*), mounted at /tmp because the root filesystem
+            # is read-only.
             - name: nginx-tmp
-              mountPath: /tmp/nginx
+              mountPath: /tmp
             # Mount the runtime CSS override over the served file. nginx returns
             # an empty no-op stylesheet if this is absent, so the mount is
             # optional and safe to omit.
