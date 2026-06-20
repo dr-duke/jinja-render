@@ -7,7 +7,8 @@ visualization.
 
 - **Backend:** Python 3.12 · FastAPI · Pydantic v2 · Jinja2 (sandboxed) · PyYAML · netaddr
 - **Frontend:** React 18 · Vite · TypeScript · Zustand
-- **Packaging:** Docker Compose
+- **Packaging:** single container (FastAPI serves the API + built SPA on one
+  origin) · Docker Compose
 
 ## Features
 
@@ -30,8 +31,10 @@ visualization.
 docker compose up -d --build
 ```
 
-- Frontend: <http://localhost:8080>
-- Backend API: <http://localhost:8000> (e.g. `GET /healthz`, `GET /api/v1/capabilities`)
+A single container serves both the web UI and the API on one origin:
+
+- Web UI: <http://localhost:8080>
+- API (same origin): <http://localhost:8080/api/v1/capabilities>, `GET /healthz`
 
 Stop with `docker compose down`.
 
@@ -67,7 +70,7 @@ repo/
 │       ├── core/            # config, logging, security, error taxonomy
 │       ├── services/        # parsers, filters, renderer, whitespace, examples
 │       ├── schemas/         # Pydantic request/response models
-│       └── main.py          # app factory, middleware, exception handlers
+│       └── main.py          # app factory, middleware, static SPA serving
 ├── frontend/                # Vite + React + TS
 │   └── src/
 │       ├── app/store.ts     # Zustand state
@@ -75,10 +78,16 @@ repo/
 │       ├── features/workbench/
 │       ├── services/api.ts
 │       └── types/api.ts
+├── Dockerfile               # multi-stage: Node builds SPA → FastAPI serves it
 ├── docker-compose.yml
 ├── Makefile
 └── docs/                    # spec.md + design note
 ```
+
+At runtime there is **one container**: the multi-stage `Dockerfile` builds the
+Vite SPA with Node, then copies `dist/` into the Python/FastAPI image, which
+serves the API and the static SPA together on container port 8000. The
+`backend/` and `frontend/` directories stay separate in source.
 
 - All Jinja evaluation lives **only in the backend**. The frontend never
   interprets Jinja semantics; it sends a request and renders the response.
@@ -260,15 +269,19 @@ environments.
 - **Backend:** all settings use the `JR_` prefix and map to
   `backend/app/core/config.py`. The full list with defaults is documented in
   `backend/.env.example` (app, guardrails, render pool, rate limit, hostfacts,
-  docs paths, CORS). In Docker/Kubernetes, supply these via env / ConfigMap.
+  docs paths, static dir, CORS). In Docker/Kubernetes, supply these via env /
+  ConfigMap. `JR_static_dir` (default `/app/static`) is where FastAPI serves the
+  built SPA from; `JR_custom_css_path` (default `<static_dir>/custom.css`) is the
+  optional runtime CSS override file.
 - **Frontend:**
-  - The app calls a relative `/api`, which nginx proxies to the backend; the
-    backend address is set in `frontend/nginx.conf` (`set $backend_upstream`).
+  - The app and the API share one origin, so the app calls a same-origin
+    `/api/v1` — no proxy is involved. (In local Vite dev, `npm run dev` proxies
+    `/api` → `:8000`.)
   - **Runtime CSS override without rebuilding:** `index.html` always loads
-    `/custom.css` last (so it overrides bundled styles). nginx serves a mounted
-    `custom.css` if present and returns an empty no-op stylesheet otherwise, so a
-    missing file never 404s. Mount your own file (e.g. from a ConfigMap) to
-    restyle a running deployment.
+    `/custom.css` last (so it overrides bundled styles). FastAPI serves a mounted
+    `custom.css` if present (as `text/css`) and returns an empty no-op stylesheet
+    otherwise, so a missing file never 404s. Mount your own file (e.g. from a
+    ConfigMap) over `<JR_static_dir>/custom.css` to restyle a running deployment.
 
 ## Kubernetes
 
@@ -276,40 +289,39 @@ Reference manifests live in `k8s/` (samples to adapt, not a production Helm
 chart):
 
 - `configmap.yaml` — backend `JR_*` settings and an optional `custom.css`.
-- `backend-deployment.yaml` — backend `Deployment` + `Service` with
-  `livenessProbe: /livez`, `readinessProbe: /readyz`, non-root `securityContext`,
-  and CPU/memory `resources`.
-- `frontend-deployment.yaml` — frontend `Deployment` + `Service`, fully non-root
-  `securityContext` (nginx on container port 8080, no `NET_BIND_SERVICE`), and the
-  `custom.css` ConfigMap mounted over the served file.
+- `app-deployment.yaml` — the app `Deployment` + `Service` + `Ingress` with
+  `livenessProbe: /livez`, `readinessProbe: /readyz`, non-root `securityContext`
+  (uid 10001, read-only root FS, writable `/tmp` emptyDir), CPU/memory
+  `resources`, and the `custom.css` ConfigMap mounted over
+  `/app/static/custom.css`. The Service exposes port 80 → targetPort 8000; the
+  Ingress publishes the whole app (SPA + `/api` on one origin).
 - `values-nxs-universal-chart.yaml` — values for the
   [nxs-universal-chart](https://github.com/nixys/nxs-universal-chart) (tested
-  against 3.1.0) to deploy the same stack via Helm using the GHCR images,
-  including a frontend `Ingress` (default host `jinja-render.local`).
+  against 3.1.0) to deploy the same single container via Helm using the GHCR
+  image, including the `Ingress` (default host `jinja-render.local`).
 
-### Container images (GHCR)
+### Container image (GHCR)
 
-The `Build and publish images` GitHub Actions workflow builds and pushes:
+The `Build and publish image` GitHub Actions workflow builds and pushes a single
+image:
 
-- `ghcr.io/dr-duke/jinja-render/backend`
-- `ghcr.io/dr-duke/jinja-render/frontend`
+- `ghcr.io/dr-duke/jinja-render/app`
 
 on pushes to `main`, `v*` tags, and manual dispatch (pull requests build but do
-not push). Deploy them via the Nixys chart into the `jinja-render` namespace,
-overriding the image tags to a pushed `sha-<short>` or `v*` tag:
+not push). Deploy it via the Nixys chart into the `jinja-render` namespace,
+overriding the image tag to a pushed `sha-<short>` or `v*` tag:
 
 ```bash
 helm upgrade --install jinja-render \
   oci://registry.nixys.ru/nuc/nxs-universal-chart --version 3.1.0 \
   -n jinja-render --create-namespace \
   -f k8s/values-nxs-universal-chart.yaml \
-  --set 'deployments.backend.containers.backend.imageTag=sha-abc1234' \
-  --set 'deployments.frontend.containers.frontend.imageTag=sha-abc1234'
+  --set 'deployments.app.containers.app.imageTag=sha-abc1234'
 ```
 
 The chart has no namespace value, so the namespace comes from Helm
-(`-n jinja-render --create-namespace`). Only the frontend is exposed via Ingress;
-it proxies `/api` to the backend in-cluster. Override the host with
+(`-n jinja-render --create-namespace`). The Ingress exposes the whole app on one
+origin. Override the host with
 `--set 'ingresses.jinja-render\.local.hosts[0].hostname=your.host'`.
 
 See `k8s/README.md` for apply instructions and notes (per-pod rate limiting,

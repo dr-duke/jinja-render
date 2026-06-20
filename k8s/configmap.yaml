@@ -1,4 +1,4 @@
-# Backend runtime configuration (JR_* env) and optional frontend CSS override.
+# Backend runtime configuration (JR_* env) and optional runtime CSS override.
 # These are reference samples — adapt names/values to your cluster.
 apiVersion: v1
 kind: ConfigMap
@@ -25,11 +25,14 @@ data:
   JR_ansible_facts_default: "true"
   JR_docs_swagger_path: "/swagger"
   JR_openapi_url: "/openapi.json"
+  # Directory FastAPI serves the built SPA from (where the image copies dist).
+  JR_static_dir: "/app/static"
   # CORS origins as a JSON array.
   JR_cors_origins: '["http://localhost:5173"]'
 ---
-# Optional: runtime CSS override mounted over the frontend's /custom.css.
-# Edit these rules to restyle a running deployment without rebuilding the image.
+# Optional: runtime CSS override mounted over the app's served /custom.css
+# (FastAPI serves it from <JR_static_dir>/custom.css). Edit these rules to
+# restyle a running deployment without rebuilding the image.
 apiVersion: v1
 kind: ConfigMap
 metadata:

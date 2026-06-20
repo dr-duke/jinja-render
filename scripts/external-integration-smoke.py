@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """External integration smoke test for a running jinja-render deployment.
 
-Hits the backend directly (default http://localhost:8000) and the frontend /
-nginx proxy (default http://localhost:8080), exercising the documented public
-behavior. Intended to be run AFTER `docker compose up -d --build`.
+The app is a single container: FastAPI serves the SPA and the API on one origin
+(default http://localhost:8080, the docker-compose host port → container 8000).
+Exercises the documented public behavior. Intended to be run AFTER
+`docker compose up -d --build`.
 
 Exit code is non-zero if any check fails.
 
 Usage:
     python scripts/external-integration-smoke.py
-    BACKEND_URL=http://localhost:8000 FRONTEND_URL=http://localhost:8080 \
-        python scripts/external-integration-smoke.py
+    APP_URL=http://localhost:8080 python scripts/external-integration-smoke.py
 """
 
 from __future__ import annotations
@@ -21,8 +21,14 @@ import sys
 import urllib.error
 import urllib.request
 
-BACKEND = os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
-FRONTEND = os.environ.get("FRONTEND_URL", "http://localhost:8080").rstrip("/")
+# Single origin serves both the SPA and the API. APP_URL is the public base;
+# BACKEND_URL/FRONTEND_URL remain accepted as fallbacks for older invocations.
+APP = os.environ.get(
+    "APP_URL",
+    os.environ.get("FRONTEND_URL", os.environ.get("BACKEND_URL", "http://localhost:8080")),
+).rstrip("/")
+BACKEND = APP
+FRONTEND = APP
 
 results: list[tuple[bool, str]] = []
 
@@ -81,12 +87,13 @@ def render_body(template: str, data: str, **opts) -> dict:
 
 
 def main() -> int:
-    # --- Frontend (static + proxy) ---
-    check("frontend root html", "GET", f"{FRONTEND}/", contains="<div id=\"root\"")
-    check("frontend nginx /api proxy", "GET", f"{FRONTEND}/api/v1/capabilities",
+    # --- SPA + same-origin API ---
+    check("spa root html", "GET", f"{APP}/", contains="<div id=\"root\"")
+    check("same-origin /api proxy", "GET", f"{APP}/api/v1/capabilities",
           contains="render_modes")
+    check("custom.css served", "GET", f"{APP}/custom.css", expect_status=200)
 
-    # --- Backend health & metadata ---
+    # --- Health & metadata ---
     check("backend /healthz", "GET", f"{BACKEND}/healthz", contains="ok")
     check("backend /api/v1/capabilities", "GET", f"{BACKEND}/api/v1/capabilities",
           contains="ipaddr")

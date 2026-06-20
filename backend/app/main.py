@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 import uuid
 
@@ -7,10 +8,16 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    PlainTextResponse,
+    Response,
+)
+from fastapi.staticfiles import StaticFiles
 
 from .api.v1 import capabilities, examples, render
-from .core.config import get_settings
+from .core.config import Settings, get_settings
 from .core.errors import RenderError
 from .core.logging import configure_logging, get_logger
 from .core.ratelimit import TokenBucketRateLimiter, client_key
@@ -207,7 +214,65 @@ def create_app() -> FastAPI:
             lines.append(f'render_errors_by_type{{type="{err_type}"}} {count}')
         return "\n".join(lines) + "\n"
 
+    _mount_frontend(app, settings)
+
     return app
+
+
+def _custom_css_file(settings: Settings) -> str:
+    """Resolve the runtime CSS override path (defaults to <static>/custom.css)."""
+    return settings.custom_css_path or os.path.join(settings.static_dir, "custom.css")
+
+
+def _mount_frontend(app: FastAPI, settings: Settings) -> None:
+    """Serve the built SPA from the same origin as the API.
+
+    Registers (in this order, so nothing shadows the API):
+      - GET /custom.css   — optional runtime override; empty no-op css if absent.
+      - StaticFiles mount  — serves /assets/* and any other bundled file.
+      - GET catch-all      — returns index.html for SPA client-side routes.
+
+    When static_dir is missing (backend-only local dev) only /custom.css is
+    registered (still tolerant of a missing file) and the SPA routes are skipped.
+    """
+
+    @app.get("/custom.css", include_in_schema=False)
+    def custom_css() -> Response:
+        path = _custom_css_file(settings)
+        if os.path.isfile(path):
+            return FileResponse(path, media_type="text/css")
+        # No override mounted: empty no-op stylesheet (never 404) so the page's
+        # <link rel="stylesheet" href="/custom.css"> stays clean.
+        return Response(content="", media_type="text/css")
+
+    static_dir = os.path.abspath(settings.static_dir)
+    index_file = os.path.join(static_dir, "index.html")
+    if not os.path.isdir(static_dir) or not os.path.isfile(index_file):
+        # Static bundle not present (e.g. running the API alone). Skip SPA
+        # serving; the API and /custom.css still work.
+        logger.info("frontend_static_not_found", extra={"jr_static_dir": static_dir})
+        return
+
+    # Mount bundled Vite assets if present (StaticFiles errors on a missing dir).
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/", include_in_schema=False)
+    def spa_root() -> FileResponse:
+        return FileResponse(index_file, media_type="text/html")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback(full_path: str) -> Response:
+        # Serve a real bundled file if it exists (favicon, manifest, etc.);
+        # otherwise return index.html so client-side routing handles the path.
+        candidate = os.path.normpath(os.path.join(static_dir, full_path))
+        if (
+            candidate.startswith(os.path.abspath(static_dir) + os.sep)
+            and os.path.isfile(candidate)
+        ):
+            return FileResponse(candidate)
+        return FileResponse(index_file, media_type="text/html")
 
 
 app = create_app()

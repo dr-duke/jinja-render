@@ -1,0 +1,11 @@
+# Build context excludes for the single-container root Dockerfile.
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+frontend/tsconfig.tsbuildinfo
+.git
+docs
+k8s

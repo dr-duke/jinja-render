@@ -1,4 +1,6 @@
-.PHONY: help backend-install backend-dev backend-test frontend-install frontend-dev frontend-test frontend-build up down logs
+.PHONY: help backend-install backend-dev backend-test frontend-install frontend-dev frontend-test frontend-build image up down logs
+
+IMAGE ?= jinja-render-app:latest
 
 help:
 	@echo "Targets:"
@@ -9,7 +11,8 @@ help:
 	@echo "  frontend-dev      Run Vite dev server"
 	@echo "  frontend-test     Run vitest"
 	@echo "  frontend-build    Type-check and build frontend"
-	@echo "  up                docker compose up -d --build"
+	@echo "  image             Build the single app image (multi-stage Dockerfile)"
+	@echo "  up                docker compose up -d --build (one app container)"
 	@echo "  down              docker compose down"
 	@echo "  logs              docker compose logs -f"
 
@@ -33,6 +36,9 @@ frontend-test:
 
 frontend-build:
 	cd frontend && npm run build
+
+image:
+	docker build -t $(IMAGE) .
 
 up:
 	docker compose up -d --build

@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     # CORS origins for local dev (frontend Vite server).
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
+    # Static frontend serving. The single-container image builds the React/Vite
+    # SPA and copies its dist/ into static_dir; FastAPI serves it (assets +
+    # index.html SPA fallback) on the same origin as the API. When static_dir
+    # does not exist (e.g. running the backend alone in local dev), static
+    # serving is disabled gracefully and the API still works.
+    static_dir: str = "/app/static"
+    # Optional runtime CSS override file. If present it is served at /custom.css;
+    # if absent, an empty no-op text/css 200 is returned (never 404). Defaults to
+    # <static_dir>/custom.css when left empty.
+    custom_css_path: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

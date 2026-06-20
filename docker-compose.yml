@@ -1,17 +1,19 @@
+# Single-container app: FastAPI serves the built SPA and the API on one origin.
+# Web UI and API are reachable at http://localhost:8080 (host) -> 8000 (container).
 services:
-  backend:
-    build: ./backend
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       JR_DEBUG: "false"
       JR_RENDER_TIMEOUT_SECONDS: "2.0"
-    expose:
-      - "8000"
     ports:
-      - "8000:8000"
+      - "8080:8000"
     healthcheck:
       test:
         ["CMD", "python", "-c",
-         "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').status==200 else 1)"]
+         "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/livez').status==200 else 1)"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -19,20 +21,4 @@ services:
     security_opt:
       - no-new-privileges:true
     read_only: false
-    restart: unless-stopped
-
-  frontend:
-    build: ./frontend
-    ports:
-      - "8080:8080"
-    depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test:
-        ["CMD", "wget", "--quiet", "--tries=1", "--spider",
-         "http://127.0.0.1:8080/nginx-health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
     restart: unless-stopped
