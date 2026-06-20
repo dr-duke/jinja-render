@@ -14,5 +14,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Validate the nginx config at build time so a broken config fails the build
 # rather than silently producing a container that exits on startup.
 RUN nginx -t
-EXPOSE 80
+# Serve on 8080 so the container can run as a non-root user without the
+# NET_BIND_SERVICE capability (see nginx.conf `listen 8080`).
+EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]

@@ -12,8 +12,10 @@ runtime CSS override.
 - `backend-deployment.yaml` — backend `Deployment` + `Service`. Probes:
   `livenessProbe: /livez`, `readinessProbe: /readyz` (verifies the render worker
   pool). Runs non-root with dropped capabilities and a read-only root FS.
-- `frontend-deployment.yaml` — frontend `Deployment` + `Service`. Mounts the
-  `custom.css` ConfigMap over `/usr/share/nginx/html/custom.css`.
+- `frontend-deployment.yaml` — frontend `Deployment` + `Service`. nginx listens
+  on container port **8080** (runs fully non-root, no `NET_BIND_SERVICE`); the
+  Service exposes port 80 → targetPort 8080. Mounts the `custom.css` ConfigMap
+  over `/usr/share/nginx/html/custom.css`.
 
 ## Build and load images
 
@@ -33,16 +35,19 @@ Replace the `image:` fields with your registry path for a real cluster.
 
 ## Apply
 
+These manifests carry no `namespace:` field, so create one and target it:
+
 ```bash
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/backend-deployment.yaml
-kubectl apply -f k8s/frontend-deployment.yaml
+kubectl create namespace jinja-render
+kubectl -n jinja-render apply -f k8s/configmap.yaml
+kubectl -n jinja-render apply -f k8s/backend-deployment.yaml
+kubectl -n jinja-render apply -f k8s/frontend-deployment.yaml
 ```
 
-Port-forward to try it locally:
+Port-forward to try it locally (Service port 80 → container 8080):
 
 ```bash
-kubectl port-forward svc/jinja-render-frontend 8080:80
+kubectl -n jinja-render port-forward svc/jinja-render-frontend 8080:80
 # open http://localhost:8080
 ```
 
@@ -71,26 +76,59 @@ The `image:` fields in `k8s/values-nxs-universal-chart.yaml` already point at th
 `dr-duke/jinja-render` GHCR paths. Render to inspect, then install. **Override the
 image tags to the tag/sha you actually pushed** (the file defaults to `latest`):
 
+The chart has no namespace value of its own — every resource lands in the Helm
+**release namespace**. Install into `jinja-render` with `-n jinja-render
+--create-namespace`:
+
 ```bash
-# Inspect the rendered manifests first
+# Inspect the rendered manifests first (namespace must be supplied here too)
 helm template jinja-render \
   oci://registry.nixys.ru/nuc/nxs-universal-chart --version 3.1.0 \
-  -f k8s/values-nxs-universal-chart.yaml
+  -n jinja-render -f k8s/values-nxs-universal-chart.yaml
 
-# Install / upgrade, pinning to a pushed tag or commit sha
+# Install / upgrade into the jinja-render namespace, pinning to a pushed tag/sha
 helm upgrade --install jinja-render \
   oci://registry.nixys.ru/nuc/nxs-universal-chart --version 3.1.0 \
+  -n jinja-render --create-namespace \
   -f k8s/values-nxs-universal-chart.yaml \
   --set 'deployments.backend.containers.backend.imageTag=sha-abc1234' \
   --set 'deployments.frontend.containers.frontend.imageTag=sha-abc1234'
 ```
 
 The `sha-<short>` tags are produced by the workflow's `type=sha` metadata; a
-released `v*` tag (e.g. `1.2.3`) works too. Then port-forward as below.
+released `v*` tag (e.g. `1.2.3`) works too.
 
 > The chart prefixes resource names with the release name, so the Service for
 > the frontend is `jinja-render-frontend` (matching the raw-manifest name used
 > in the port-forward command below).
+
+### Ingress and host
+
+The values file defines an `Ingress` that exposes **only the frontend**; the SPA
+proxies `/api` and `/healthz` to the backend in-cluster (see
+`frontend/nginx.conf`), so the backend is never published externally. The
+default host is `jinja-render.local` with `ingressClassName: nginx`.
+
+Override the host (and class, if your controller differs):
+
+```bash
+helm upgrade --install jinja-render \
+  oci://registry.nixys.ru/nuc/nxs-universal-chart --version 3.1.0 \
+  -n jinja-render --create-namespace \
+  -f k8s/values-nxs-universal-chart.yaml \
+  --set 'ingresses.jinja-render\.local.hosts[0].hostname=jinja.example.com'
+```
+
+For local testing, point `jinja-render.local` at your ingress controller's IP in
+`/etc/hosts`, or skip the Ingress entirely and port-forward:
+
+```bash
+kubectl -n jinja-render port-forward svc/jinja-render-frontend 8080:80
+# open http://localhost:8080
+```
+
+The frontend Service listens on port 80 and targets the container's **8080**
+(nginx runs non-root on 8080 — see the port note below).
 
 ## Runtime CSS override
 
@@ -116,8 +154,9 @@ All backend runtime config is supplied via the `jinja-render-config` ConfigMap
   (e.g. Redis-backed) counter.
 - **ansible hostfacts are static and fabricated** — real host facts are never
   gathered.
-- **Frontend port 80.** The sample adds the `NET_BIND_SERVICE` capability so the
-  non-root nginx can bind port 80. Alternatively, switch to an unprivileged
-  nginx image listening on a high port (e.g. 8080) and update the probes/Service.
-- These manifests omit Ingress, TLS, HPA/autoscaling, NetworkPolicies, and
-  PodDisruptionBudgets — add them per your cluster's standards.
+- **Frontend port 8080.** nginx binds 8080 so the pod runs fully non-root with
+  all capabilities dropped (no `NET_BIND_SERVICE`). The Service still exposes
+  port 80 (targetPort 8080), so external consumers and the Ingress are unchanged.
+- **Raw manifests omit Ingress, TLS, HPA/autoscaling, NetworkPolicies, and
+  PodDisruptionBudgets** — add them per your cluster's standards. The Nixys chart
+  values file (above) does define an Ingress for the frontend.

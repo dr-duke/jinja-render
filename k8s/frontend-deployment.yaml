@@ -30,7 +30,7 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
           livenessProbe:
             httpGet:
               path: /nginx-health
@@ -52,11 +52,11 @@ spec:
               memory: "128Mi"
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            # nginx listens on 8080 (see nginx.conf), so binding needs no extra
+            # capability — run fully non-root with all capabilities dropped.
             capabilities:
               drop: ["ALL"]
-              # Required only because nginx binds port 80. Alternatively use an
-              # unprivileged nginx image listening on a high port (e.g. 8080).
-              add: ["NET_BIND_SERVICE"]
           volumeMounts:
             # Mount the runtime CSS override over the served file. nginx returns
             # an empty no-op stylesheet if this is absent, so the mount is
@@ -82,6 +82,7 @@ spec:
     app: jinja-render
     component: frontend
   ports:
+    # External port 80; targetPort "http" resolves to the container's 8080.
     - name: http
       port: 80
       targetPort: http

@@ -279,11 +279,13 @@ chart):
 - `backend-deployment.yaml` — backend `Deployment` + `Service` with
   `livenessProbe: /livez`, `readinessProbe: /readyz`, non-root `securityContext`,
   and CPU/memory `resources`.
-- `frontend-deployment.yaml` — frontend `Deployment` + `Service`, non-root
-  `securityContext`, and the `custom.css` ConfigMap mounted over the served file.
+- `frontend-deployment.yaml` — frontend `Deployment` + `Service`, fully non-root
+  `securityContext` (nginx on container port 8080, no `NET_BIND_SERVICE`), and the
+  `custom.css` ConfigMap mounted over the served file.
 - `values-nxs-universal-chart.yaml` — values for the
   [nxs-universal-chart](https://github.com/nixys/nxs-universal-chart) (tested
-  against 3.1.0) to deploy the same stack via Helm using the GHCR images.
+  against 3.1.0) to deploy the same stack via Helm using the GHCR images,
+  including a frontend `Ingress` (default host `jinja-render.local`).
 
 ### Container images (GHCR)
 
@@ -293,16 +295,22 @@ The `Build and publish images` GitHub Actions workflow builds and pushes:
 - `ghcr.io/dr-duke/jinja-render/frontend`
 
 on pushes to `main`, `v*` tags, and manual dispatch (pull requests build but do
-not push). Deploy them via the Nixys chart, overriding the image tags to a
-pushed `sha-<short>` or `v*` tag:
+not push). Deploy them via the Nixys chart into the `jinja-render` namespace,
+overriding the image tags to a pushed `sha-<short>` or `v*` tag:
 
 ```bash
 helm upgrade --install jinja-render \
   oci://registry.nixys.ru/nuc/nxs-universal-chart --version 3.1.0 \
+  -n jinja-render --create-namespace \
   -f k8s/values-nxs-universal-chart.yaml \
   --set 'deployments.backend.containers.backend.imageTag=sha-abc1234' \
   --set 'deployments.frontend.containers.frontend.imageTag=sha-abc1234'
 ```
+
+The chart has no namespace value, so the namespace comes from Helm
+(`-n jinja-render --create-namespace`). Only the frontend is exposed via Ingress;
+it proxies `/api` to the backend in-cluster. Override the host with
+`--set 'ingresses.jinja-render\.local.hosts[0].hostname=your.host'`.
 
 See `k8s/README.md` for apply instructions and notes (per-pod rate limiting,
 ingress/TLS left to the cluster operator).

@@ -3,16 +3,22 @@
 #   Chart: nxs-universal-chart (https://github.com/nixys/nxs-universal-chart)
 #   Pinned/tested against chart version 3.1.0 (appVersion v1).
 #
-# This renders both the backend (FastAPI, port 8000) and the frontend
-# (nginx serving the built SPA, port 80), their Services, a ConfigMap with the
+# This renders both the backend (FastAPI, port 8000) and the frontend (nginx
+# serving the built SPA, container port 8080), their Services, an Ingress that
+# exposes the frontend (which proxies /api to the backend), a ConfigMap with the
 # backend JR_* runtime settings, and an optional ConfigMap that overrides the
 # frontend's /custom.css at runtime.
 #
-# Render / install:
+# Namespace: the chart has no namespace value — resources land in the Helm
+# release namespace (.Release.Namespace). Install into the jinja-render namespace
+# with `-n jinja-render --create-namespace` (see the install command below).
+#
+# Render / install (always into the jinja-render namespace):
 #   helm template jinja-render oci://registry.nixys.ru/nuc/nxs-universal-chart \
-#     --version 3.1.0 -f k8s/values-nxs-universal-chart.yaml
+#     --version 3.1.0 -n jinja-render -f k8s/values-nxs-universal-chart.yaml
 #   helm upgrade --install jinja-render \
 #     oci://registry.nixys.ru/nuc/nxs-universal-chart --version 3.1.0 \
+#     -n jinja-render --create-namespace \
 #     -f k8s/values-nxs-universal-chart.yaml
 #
 # IMPORTANT: override the image tags to the tag/sha you actually pushed to GHCR,
@@ -154,17 +160,19 @@ deployments:
           # nginx writes cache/run dirs; keep root FS writable for the SPA image.
           readOnlyRootFilesystem: false
         ports:
+          # nginx listens on 8080 so the pod runs non-root without
+          # NET_BIND_SERVICE (binding a port <1024 would require it).
           - name: http
-            containerPort: 80
+            containerPort: 8080
         livenessProbe:
           httpGet:
-            path: /
+            path: /nginx-health
             port: http
           initialDelaySeconds: 5
           periodSeconds: 15
         readinessProbe:
           httpGet:
-            path: /
+            path: /nginx-health
             port: http
           initialDelaySeconds: 5
           periodSeconds: 10
@@ -206,6 +214,26 @@ services:
     extraSelectorLabels:
       component: frontend
     ports:
+      # Service exposes the conventional port 80; targetPort "http" resolves to
+      # the container's 8080 listener.
       - name: http
         port: 80
         targetPort: http
+
+# --- Ingress ------------------------------------------------------------------
+# Exposes only the frontend; the SPA proxies /api and /healthz to the backend
+# in-cluster (see frontend/nginx.conf), so the backend is never published.
+# Override the host: --set 'ingresses.jinja-render\.local.hosts[0].hostname=your.host'
+# or edit the key below. ingressClassName defaults to nginx — adjust for your
+# controller (e.g. traefik). servicePort "http" matches services.frontend above.
+ingresses:
+  jinja-render.local:
+    labels:
+      component: frontend
+    ingressClassName: nginx
+    hosts:
+      - paths:
+          - path: /
+            pathType: Prefix
+            serviceName: frontend
+            servicePort: http
