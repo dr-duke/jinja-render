@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jinja-render-backend
+  labels:
+    app: jinja-render
+    component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jinja-render
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: jinja-render
+        component: backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backend
+          # Replace with your built/pushed image reference.
+          image: jinja-render-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: jinja-render-config
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            # /readyz verifies the render worker pool is initialized and ready.
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              # Render is CPU-bound; a limit contains runaway templates per pod.
+              cpu: "1"
+              memory: "256Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jinja-render-backend
+  labels:
+    app: jinja-render
+    component: backend
+spec:
+  selector:
+    app: jinja-render
+    component: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

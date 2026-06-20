@@ -1,0 +1,211 @@
+# Values for deploying jinja-render with the Nixys universal chart.
+#
+#   Chart: nxs-universal-chart (https://github.com/nixys/nxs-universal-chart)
+#   Pinned/tested against chart version 3.1.0 (appVersion v1).
+#
+# This renders both the backend (FastAPI, port 8000) and the frontend
+# (nginx serving the built SPA, port 80), their Services, a ConfigMap with the
+# backend JR_* runtime settings, and an optional ConfigMap that overrides the
+# frontend's /custom.css at runtime.
+#
+# Render / install:
+#   helm template jinja-render oci://registry.nixys.ru/nuc/nxs-universal-chart \
+#     --version 3.1.0 -f k8s/values-nxs-universal-chart.yaml
+#   helm upgrade --install jinja-render \
+#     oci://registry.nixys.ru/nuc/nxs-universal-chart --version 3.1.0 \
+#     -f k8s/values-nxs-universal-chart.yaml
+#
+# IMPORTANT: override the image tags to the tag/sha you actually pushed to GHCR,
+# e.g. --set 'deployments.backend.containers.backend.imageTag=sha-abc1234'.
+# See k8s/README.md for the full publish-then-deploy workflow.
+#
+# Assumptions (the chart is intentionally generic, so these are explicit):
+#   - Images live at ghcr.io/dr-duke/jinja-render/{backend,frontend}.
+#   - The frontend image already tolerates a missing /custom.css (nginx config
+#     falls back to an empty stylesheet), so the CSS ConfigMap mount is optional.
+#   - The chart prefixes resource names with the release name via
+#     helpers.app.fullname; Services and volume configMap refs use that same
+#     helper, so in-cluster references line up automatically.
+
+nameOverride: jinja-render
+
+# Pull policy for images that don't pin a tag explicitly here.
+defaultImagePullPolicy: IfNotPresent
+
+# Cluster-wide defaults applied to every workload below.
+generic:
+  labels:
+    app.kubernetes.io/part-of: jinja-render
+  # Run every pod as the non-root user baked into both Dockerfiles.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+
+# --- ConfigMaps ---------------------------------------------------------------
+configMaps:
+  # Backend runtime configuration. Keys map 1:1 to backend/app/core/config.py
+  # (env_prefix JR_). Consumed by the backend container via envsFromConfigmap.
+  config:
+    labels:
+      component: backend
+    data:
+      JR_app_name: jinja-render
+      JR_debug: "false"
+      JR_max_template_bytes: "524288"
+      JR_max_data_bytes: "1048576"
+      JR_max_data_depth: "50"
+      JR_render_timeout_seconds: "2.0"
+      JR_render_pool_size: "2"
+      JR_rate_limit_enabled: "true"
+      JR_rate_limit_requests_per_minute: "120"
+      JR_rate_limit_burst: "40"
+      JR_ansible_facts_enabled: "true"
+      JR_ansible_facts_default: "true"
+      JR_docs_swagger_path: /swagger
+      JR_openapi_url: /openapi.json
+      JR_cors_origins: '["http://localhost:5173"]'
+  # Optional runtime CSS override mounted over the frontend's served
+  # /usr/share/nginx/html/custom.css. Edit to restyle without rebuilding.
+  custom-css:
+    labels:
+      component: frontend
+    data:
+      custom.css: |
+        /* Example override: tweak the accent color. Remove or replace freely. */
+        /* :root { --accent: #e08c3b; } */
+
+# --- Deployments --------------------------------------------------------------
+deployments:
+  backend:
+    labels:
+      component: backend
+    replicas: 1
+    extraSelectorLabels:
+      component: backend
+    containers:
+      backend:
+        image: ghcr.io/dr-duke/jinja-render/backend
+        # Override to the pushed tag/sha (e.g. sha-abc1234 or a v* tag).
+        imageTag: latest
+        securityContext:
+          mergeWithGeneric: true
+          readOnlyRootFilesystem: true
+        ports:
+          - name: http
+            containerPort: 8000
+        envsFromConfigmap:
+          config:
+            - JR_app_name
+            - JR_debug
+            - JR_max_template_bytes
+            - JR_max_data_bytes
+            - JR_max_data_depth
+            - JR_render_timeout_seconds
+            - JR_render_pool_size
+            - JR_rate_limit_enabled
+            - JR_rate_limit_requests_per_minute
+            - JR_rate_limit_burst
+            - JR_ansible_facts_enabled
+            - JR_ansible_facts_default
+            - JR_docs_swagger_path
+            - JR_openapi_url
+            - JR_cors_origins
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 15
+        readinessProbe:
+          # /readyz verifies the render worker pool is initialized and ready.
+          httpGet:
+            path: /readyz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: "1"
+            memory: 256Mi
+
+  frontend:
+    labels:
+      component: frontend
+    replicas: 1
+    extraSelectorLabels:
+      component: frontend
+    containers:
+      frontend:
+        image: ghcr.io/dr-duke/jinja-render/frontend
+        # Override to the pushed tag/sha (e.g. sha-abc1234 or a v* tag).
+        imageTag: latest
+        securityContext:
+          mergeWithGeneric: true
+          # nginx writes cache/run dirs; keep root FS writable for the SPA image.
+          readOnlyRootFilesystem: false
+        ports:
+          - name: http
+            containerPort: 80
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 50m
+            memory: 32Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+        # Overlay just the single file with subPath so the rest of the served
+        # web root stays intact.
+        volumeMounts:
+          - name: custom-css
+            mountPath: /usr/share/nginx/html/custom.css
+            subPath: custom.css
+            readOnly: true
+    # The volume's configMap name is resolved through helpers.app.fullname using
+    # this .name, matching the "custom-css" entry under configMaps above.
+    volumes:
+      - name: custom-css
+        type: configMap
+
+# --- Services -----------------------------------------------------------------
+services:
+  backend:
+    labels:
+      component: backend
+    # Must match deployments.backend.extraSelectorLabels to route traffic.
+    extraSelectorLabels:
+      component: backend
+    ports:
+      - name: http
+        port: 8000
+        targetPort: http
+  frontend:
+    labels:
+      component: frontend
+    extraSelectorLabels:
+      component: frontend
+    ports:
+      - name: http
+        port: 80
+        targetPort: http

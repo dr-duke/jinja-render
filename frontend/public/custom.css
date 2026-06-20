@@ -1,0 +1,9 @@
+/*
+ * Runtime CSS override placeholder.
+ *
+ * This file is intentionally empty. It exists so that /custom.css resolves to a
+ * valid, empty stylesheet in local development and in the default container
+ * image. To customize styling without rebuilding the image, mount your own
+ * custom.css over this file (e.g. from a Kubernetes ConfigMap). Rules here load
+ * after the bundled styles and therefore win via the CSS cascade.
+ */

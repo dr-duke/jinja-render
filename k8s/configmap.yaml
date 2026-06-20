@@ -1,0 +1,42 @@
+# Backend runtime configuration (JR_* env) and optional frontend CSS override.
+# These are reference samples — adapt names/values to your cluster.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jinja-render-config
+  labels:
+    app: jinja-render
+data:
+  # All backend settings map to backend/app/core/config.py (env_prefix JR_).
+  JR_app_name: "jinja-render"
+  JR_debug: "false"
+  JR_max_template_bytes: "524288"
+  JR_max_data_bytes: "1048576"
+  JR_max_data_depth: "50"
+  # Persistent render worker pool (no per-request spawn cold-start).
+  JR_render_timeout_seconds: "2.0"
+  JR_render_pool_size: "2"
+  # In-process rate limiting is per-pod (see k8s/README.md).
+  JR_rate_limit_enabled: "true"
+  JR_rate_limit_requests_per_minute: "120"
+  JR_rate_limit_burst: "40"
+  # Emulated, static ansible hostfacts (never reads real host facts).
+  JR_ansible_facts_enabled: "true"
+  JR_ansible_facts_default: "true"
+  JR_docs_swagger_path: "/swagger"
+  JR_openapi_url: "/openapi.json"
+  # CORS origins as a JSON array.
+  JR_cors_origins: '["http://localhost:5173"]'
+---
+# Optional: runtime CSS override mounted over the frontend's /custom.css.
+# Edit these rules to restyle a running deployment without rebuilding the image.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jinja-render-custom-css
+  labels:
+    app: jinja-render
+data:
+  custom.css: |
+    /* Example override: tweak the accent color. Remove or replace freely. */
+    /* :root { --accent: #e08c3b; } */

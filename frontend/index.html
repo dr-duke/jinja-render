@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>jinja-render — Jinja2 playground</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <!--
+      Optional runtime CSS override (e.g. mounted from a Kubernetes ConfigMap).
+      Loaded last so it can override bundled styles via the CSS cascade.
+      nginx serves an empty no-op stylesheet when no file is mounted, so a
+      missing override never 404s or breaks the page. In local Vite dev the
+      request simply yields nothing and is safely ignored.
+    -->
+    <link rel="stylesheet" href="/custom.css" />
+  </body>
+</html>
