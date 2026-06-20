@@ -35,7 +35,9 @@
 
 nameOverride: jinja-render
 
-# Pull policy for images that don't pin a tag explicitly here.
+# Fallback pull policy. Each container below sets imagePullPolicy: Always
+# explicitly (the images use the floating "latest" tag), so this default only
+# applies to any container that omits its own policy.
 defaultImagePullPolicy: IfNotPresent
 
 # Cluster-wide defaults applied to every workload below.
@@ -98,8 +100,11 @@ deployments:
     containers:
       backend:
         image: ghcr.io/dr-duke/jinja-render/backend
-        # Override to the pushed tag/sha (e.g. sha-abc1234 or a v* tag).
+        # Tag to deploy. Pin a concrete tag/sha for reproducible deploys:
+        #   --set deployments.backend.containers.backend.imageTag=sha-abc1234
         imageTag: latest
+        # Re-pull on every pod start so a freshly pushed "latest" is picked up.
+        imagePullPolicy: Always
         securityContext:
           mergeWithGeneric: true
           readOnlyRootFilesystem: true
@@ -150,11 +155,24 @@ deployments:
     replicas: 1
     extraSelectorLabels:
       component: frontend
+    # Pod-level securityContext. The unprivileged nginx image owns its runtime
+    # dirs (cache, pid) as uid 101, so the pod MUST run as 101 — override the
+    # generic runAsUser (10001) here, otherwise nginx cannot write its pid/cache.
+    securityContext:
+      mergeWithGeneric: true
+      runAsUser: 101
+      runAsGroup: 101
     containers:
       frontend:
         image: ghcr.io/dr-duke/jinja-render/frontend
-        # Override to the pushed tag/sha (e.g. sha-abc1234 or a v* tag).
+        # Tag to deploy. With the floating "latest" tag, imagePullPolicy MUST be
+        # Always (below) or the node serves a stale cached image — the usual
+        # cause of "old container still running after a new push". For
+        # reproducible deploys, pin a concrete tag/sha instead:
+        #   --set deployments.frontend.containers.frontend.imageTag=sha-abc1234
         imageTag: latest
+        # Re-pull on every pod start so a freshly pushed "latest" is picked up.
+        imagePullPolicy: Always
         securityContext:
           mergeWithGeneric: true
           # nginx writes cache/run dirs; keep root FS writable for the SPA image.

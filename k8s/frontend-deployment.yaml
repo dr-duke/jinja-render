@@ -19,7 +19,8 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        # nginx:alpine's default unprivileged-capable user.
+        # uid 101 owns the runtime dirs in the unprivileged nginx base image
+        # (nginxinc/nginx-unprivileged) the frontend Dockerfile builds on.
         runAsUser: 101
         seccompProfile:
           type: RuntimeDefault
@@ -27,6 +28,10 @@ spec:
         - name: frontend
           # Replace with your built/pushed image reference.
           image: jinja-render-frontend:latest
+          # IfNotPresent suits a locally built+loaded image (kind/minikube). If
+          # you instead pull a floating "latest" from a registry, switch to
+          # Always or pin a concrete tag, then `kubectl rollout restart` to
+          # avoid serving a stale cached image.
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

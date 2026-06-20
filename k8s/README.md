@@ -12,10 +12,11 @@ runtime CSS override.
 - `backend-deployment.yaml` — backend `Deployment` + `Service`. Probes:
   `livenessProbe: /livez`, `readinessProbe: /readyz` (verifies the render worker
   pool). Runs non-root with dropped capabilities and a read-only root FS.
-- `frontend-deployment.yaml` — frontend `Deployment` + `Service`. nginx listens
-  on container port **8080** (runs fully non-root, no `NET_BIND_SERVICE`); the
-  Service exposes port 80 → targetPort 8080. Mounts the `custom.css` ConfigMap
-  over `/usr/share/nginx/html/custom.css`.
+- `frontend-deployment.yaml` — frontend `Deployment` + `Service`. Built on the
+  unprivileged nginx image, it listens on container port **8080** as uid 101
+  (runs fully non-root, no `NET_BIND_SERVICE`, no entrypoint writes to read-only
+  paths); the Service exposes port 80 → targetPort 8080. Mounts the `custom.css`
+  ConfigMap over `/usr/share/nginx/html/custom.css`.
 
 ## Build and load images
 
@@ -130,6 +131,38 @@ kubectl -n jinja-render port-forward svc/jinja-render-frontend 8080:80
 The frontend Service listens on port 80 and targets the container's **8080**
 (nginx runs non-root on 8080 — see the port note below).
 
+### Updating a running deployment (avoid stale images)
+
+The images use the floating **`latest`** tag. If a pod keeps running an old
+image after you push a new one (e.g. the frontend still tries to bind `:80`
+after the 8080 fix), the node is serving a cached `latest`. The values file sets
+`imagePullPolicy: Always` to prevent this, but to force an already-running
+deployment to pick up a freshly pushed image:
+
+```bash
+# Re-pull and restart (works because imagePullPolicy: Always)
+kubectl -n jinja-render rollout restart deployment/jinja-render-frontend
+kubectl -n jinja-render rollout status  deployment/jinja-render-frontend
+
+# Or hard-delete the pod(s) so they are recreated and re-pulled
+kubectl -n jinja-render delete pod -l app.kubernetes.io/name=jinja-render
+```
+
+**Recommended for reproducible deploys:** pin a concrete tag (the workflow
+publishes `sha-<short>` and, on releases, `v*`) instead of relying on `latest`:
+
+```bash
+helm upgrade --install jinja-render \
+  oci://registry.nixys.ru/nuc/nxs-universal-chart --version 3.1.0 \
+  -n jinja-render --create-namespace \
+  -f k8s/values-nxs-universal-chart.yaml \
+  --set 'deployments.frontend.containers.frontend.imageTag=sha-abc1234' \
+  --set 'deployments.backend.containers.backend.imageTag=sha-abc1234'
+```
+
+A new immutable tag changes the pod spec, so Kubernetes always rolls out and
+pulls the right image regardless of pull policy.
+
 ## Runtime CSS override
 
 `index.html` always loads `/custom.css` last, so it overrides bundled styles.
@@ -154,9 +187,13 @@ All backend runtime config is supplied via the `jinja-render-config` ConfigMap
   (e.g. Redis-backed) counter.
 - **ansible hostfacts are static and fabricated** — real host facts are never
   gathered.
-- **Frontend port 8080.** nginx binds 8080 so the pod runs fully non-root with
-  all capabilities dropped (no `NET_BIND_SERVICE`). The Service still exposes
-  port 80 (targetPort 8080), so external consumers and the Ingress are unchanged.
+- **Frontend port 8080 / non-root.** The frontend is built on
+  `nginxinc/nginx-unprivileged`, which binds 8080 as uid 101 and writes its
+  cache/pid to user-owned paths — so the pod runs fully non-root with all
+  capabilities dropped (no `NET_BIND_SERVICE`) and without the stock image's
+  entrypoint failing on a read-only root FS. The pod securityContext therefore
+  pins `runAsUser: 101` (the chart's generic `runAsUser: 10001` is overridden
+  for the frontend only). The Service still exposes port 80 (targetPort 8080).
 - **Raw manifests omit Ingress, TLS, HPA/autoscaling, NetworkPolicies, and
   PodDisruptionBudgets** — add them per your cluster's standards. The Nixys chart
   values file (above) does define an Ingress for the frontend.
