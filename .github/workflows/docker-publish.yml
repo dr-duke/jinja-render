@@ -1,10 +1,12 @@
 name: Build, publish and release
 
-# Builds the single application container image (multi-stage: Node builds the
-# SPA, Python/FastAPI serves it together with the API) with Docker Buildx and
+# Runs the backend (pytest) and frontend (vitest) test suites, then builds the
+# single application container image (multi-stage: Node builds the SPA,
+# Python/FastAPI serves it together with the API) with Docker Buildx and
 # publishes it to the GitHub Container Registry (GHCR):
 #   ghcr.io/<owner>/<repo>/app
 #
+# The image is built/published ONLY if tests pass (build needs: test).
 # On version tags (v*) a GitHub Release is also created with auto-generated
 # release notes.
 #
@@ -25,7 +27,48 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest httpx
+
+      - name: Run backend tests
+        working-directory: backend
+        run: python -m pytest -q
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm run test
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
