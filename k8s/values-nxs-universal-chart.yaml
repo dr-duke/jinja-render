@@ -190,6 +190,9 @@ services:
 # controller (e.g. traefik). servicePort "http" matches services.app above.
 ingresses:
   jinja-render.local:
+    certManager:
+      originalIssuerName: cluster-issuer-le
+      issuerType: cluster-issuer
     labels:
       component: app
     ingressClassName: nginx
