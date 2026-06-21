@@ -6,6 +6,7 @@ import type { PanelId } from "../app/store";
 import { PanelActions } from "./PanelActions";
 import { CodeMirrorEditor } from "./editor/CodeMirrorEditor";
 import { jinja } from "./editor/jinja";
+import { jinjaAutocomplete } from "./editor/complete";
 
 interface EditorProps {
   label: string;
@@ -27,6 +28,18 @@ export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: Edi
     return dataFormat === "json" ? json() : yaml();
   }, [panel, dataFormat]);
 
+  // Autocomplete is only attached to the template panel. The completion env reads
+  // live store state lazily, so the extension is stable (built once) and never
+  // forces the editor to be recreated.
+  const extraExtensions = useMemo(() => {
+    if (panel !== "template") return undefined;
+    return jinjaAutocomplete({
+      getData: () => useStore.getState().data,
+      getDataFormat: () => useStore.getState().dataFormat,
+      getRenderMode: () => useStore.getState().renderMode,
+    });
+  }, [panel]);
+
   return (
     <div className="editor">
       <div className="panel-header">
@@ -39,6 +52,7 @@ export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: Edi
           onChange={onChange}
           onBlur={onBlur}
           language={language}
+          extraExtensions={extraExtensions}
           showLines={view.showLines}
           showWhitespaces={view.showWhitespaces}
           ariaLabel={ariaLabel ?? label}

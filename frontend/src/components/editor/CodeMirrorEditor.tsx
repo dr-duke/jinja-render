@@ -11,6 +11,8 @@ interface CodeMirrorEditorProps {
   onBlur?: () => void;
   /** Language/highlighting extension for this panel. */
   language?: Extension;
+  /** Extra panel-specific extensions (e.g. autocomplete on the template panel). */
+  extraExtensions?: Extension;
   showLines?: boolean;
   showWhitespaces?: boolean;
   readOnly?: boolean;
@@ -28,6 +30,7 @@ export function CodeMirrorEditor({
   onChange,
   onBlur,
   language,
+  extraExtensions,
   showLines = false,
   showWhitespaces = false,
   readOnly = false,
@@ -41,6 +44,7 @@ export function CodeMirrorEditor({
   const linesComp = useRef(new Compartment());
   const wsComp = useRef(new Compartment());
   const readOnlyComp = useRef(new Compartment());
+  const extraComp = useRef(new Compartment());
 
   // Keep the latest callbacks in refs so the view's update listener (created
   // once) always calls the current handlers without recreating the editor.
@@ -72,6 +76,7 @@ export function CodeMirrorEditor({
         EditorView.lineWrapping,
         EditorView.contentAttributes.of(contentAttrs),
         langComp.current.of(language ?? []),
+        extraComp.current.of(extraExtensions ?? []),
         linesComp.current.of(showLines ? lineNumbers() : []),
         wsComp.current.of(showWhitespaces ? whitespaceExtension() : []),
         readOnlyComp.current.of([
@@ -108,6 +113,12 @@ export function CodeMirrorEditor({
       effects: langComp.current.reconfigure(language ?? []),
     });
   }, [language]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: extraComp.current.reconfigure(extraExtensions ?? []),
+    });
+  }, [extraExtensions]);
 
   useEffect(() => {
     viewRef.current?.dispatch({
