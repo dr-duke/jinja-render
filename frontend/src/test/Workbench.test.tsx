@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -70,10 +70,10 @@ afterEach(() => {
 describe("Workbench", () => {
   it("loads with demo template and data", () => {
     render(<App />);
-    const tmpl = screen.getByLabelText("template") as HTMLTextAreaElement;
-    expect(tmpl.value).toContain("{% for host in hosts %}");
-    const data = screen.getByLabelText("data") as HTMLTextAreaElement;
-    expect(data.value).toContain("hosts:");
+    const tmpl = screen.getByLabelText("template");
+    expect(tmpl.textContent).toContain("{% for host in hosts %}");
+    const data = screen.getByLabelText("data");
+    expect(data.textContent).toContain("hosts:");
   });
 
   it("render button triggers API call and shows output", async () => {
@@ -143,9 +143,10 @@ describe("Workbench", () => {
     await waitFor(() => expect(screen.getByTestId("output")).toHaveTextContent("a b"));
     const actions = panelActions(/rendered output/i);
     await userEvent.click(within(actions).getByRole("button", { name: /show whitespaces/i }));
-    // The decorative glyph appears; it is aria-hidden so not part of raw text.
-    const pre = screen.getByTestId("output");
-    expect(pre.querySelector(".ws-glyph")).not.toBeNull();
+    // CodeMirror marks each space with a decorative class; the glyph itself is a
+    // CSS ::after pseudo-element, so it never enters the document/clipboard.
+    const content = screen.getByTestId("output");
+    expect(content.querySelector(".cm-ws-space")).not.toBeNull();
   });
 
   it("output line-numbers toggle shows a decorative gutter for that panel only", async () => {
@@ -155,17 +156,19 @@ describe("Workbench", () => {
     await waitFor(() => expect(screen.getByTestId("output")).toHaveTextContent("Hello world"));
     const outputActions = panelActions(/rendered output/i);
     await userEvent.click(within(outputActions).getByRole("button", { name: /line numbers/i }));
-    expect(document.querySelectorAll(".line-numbers").length).toBe(1);
+    // CodeMirror renders a line-number gutter only for the panel whose toggle is
+    // on; template/data default to off in beforeEach, so exactly one appears.
+    expect(document.querySelectorAll(".cm-lineNumbers").length).toBe(1);
   });
 
   it("template Clear empties the template editor only", async () => {
     render(<App />);
     const actions = panelActions(/^Template \(Jinja2\)$/);
     await userEvent.click(within(actions).getByRole("button", { name: /clear/i }));
-    const tmpl = screen.getByLabelText("template") as HTMLTextAreaElement;
-    expect(tmpl.value).toBe("");
-    const data = screen.getByLabelText("data") as HTMLTextAreaElement;
-    expect(data.value).not.toBe("");
+    const tmpl = screen.getByLabelText("template");
+    expect(tmpl.textContent).toBe("");
+    const data = screen.getByLabelText("data");
+    expect(data.textContent).not.toBe("");
   });
 
   it("output Clear removes displayed render but keeps editors", async () => {
@@ -176,8 +179,8 @@ describe("Workbench", () => {
     const actions = panelActions(/rendered output/i);
     await userEvent.click(within(actions).getByRole("button", { name: /clear/i }));
     expect(screen.getByTestId("output")).toHaveTextContent("");
-    const tmpl = screen.getByLabelText("template") as HTMLTextAreaElement;
-    expect(tmpl.value).not.toBe("");
+    const tmpl = screen.getByLabelText("template");
+    expect(tmpl.textContent).not.toBe("");
   });
 
   it("per-panel toggles persist to localStorage", async () => {
@@ -192,14 +195,17 @@ describe("Workbench", () => {
     });
   });
 
-  it("auto-render triggers a render on editor blur when enabled", async () => {
+  it("auto-render triggers a debounced render on edit when enabled", async () => {
     const spy = vi.spyOn(api, "renderTemplate").mockResolvedValue(success);
     useStore.setState({ autoRender: true });
     render(<App />);
-    const tmpl = screen.getByLabelText("template");
-    fireEvent.focus(tmpl);
-    fireEvent.blur(tmpl);
-    await waitFor(() => expect(spy).toHaveBeenCalled());
+    await waitFor(() => screen.getByLabelText("template"));
+    // Editing the template (here via the store, which CodeMirror's onChange also
+    // drives) schedules the debounced auto-render in the Workbench effect.
+    act(() => {
+      useStore.getState().setTemplate("edited {{ name }}");
+    });
+    await waitFor(() => expect(spy).toHaveBeenCalled(), { timeout: 3000 });
   });
 
   it("renders resizable splitters for the panels", () => {

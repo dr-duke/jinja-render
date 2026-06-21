@@ -235,114 +235,33 @@ select {
   padding: 4px 8px;
 }
 
-/* Shared geometry constants for text + decorative layers. */
+/* Editor/output body hosts a single CodeMirror instance that fills the panel. */
 .editor-body,
 .output-body {
   flex: 1;
   display: flex;
-  flex-direction: row;
   min-height: 0;
   overflow: hidden;
 }
 
-/* Decorative, non-selectable line-number gutter. */
-.line-numbers {
-  flex: 0 0 auto;
-  padding: 0 8px 10px;
-  text-align: right;
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
-  background: var(--panel);
-  border-right: 1px solid var(--border);
-  overflow: hidden;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.line-number {
-  display: block;
-}
-
-.editor-area {
-  position: relative;
+/* CodeMirror host element fills the available panel space; the editor scrolls
+   internally via .cm-scroller. */
+.cm-host {
   flex: 1;
   min-width: 0;
-}
-.editor-textarea {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  resize: none;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 0 10px 10px;
-  white-space: pre;
-  overflow: auto;
-  z-index: 1;
-}
-/* When the whitespace overlay is shown, hide the textarea glyphs but keep the
-   caret and selection visible, so the decorative markers show through. */
-.editor-textarea.text-transparent {
-  color: transparent;
-  caret-color: var(--text);
-}
-.editor-textarea.text-transparent::selection {
-  background: rgba(124, 140, 255, 0.35);
-}
-
-/* Decorative whitespace overlay aligned to the textarea text geometry. */
-.ws-overlay {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  padding: 0 10px 10px;
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre;
+  min-height: 0;
   overflow: hidden;
-  color: var(--text);
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
-  z-index: 0;
+}
+.cm-host .cm-editor {
+  height: 100%;
+}
+.cm-host .cm-editor.cm-focused {
+  outline: none;
+}
+.cm-host .cm-scroller {
+  padding-left: 10px;
 }
 
-.output-pre {
-  flex: 1;
-  margin: 0;
-  padding: 0 10px 10px;
-  overflow: auto;
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* Whitespace markers: the real char stays selectable; the glyph is decorative
-   and overlays the char's cell so width/alignment is preserved. */
-.ws-cell {
-  position: relative;
-}
-.ws-glyph {
-  color: var(--muted);
-  opacity: 0.55;
-  user-select: none;
-  -webkit-user-select: none;
-}
-/* For space/tab, overlay the glyph on top of the real char without adding width. */
-.ws-cell > .ws-glyph {
-  position: absolute;
-  left: 0;
-  top: 0;
-}
 .output-meta {
   padding: 6px 10px;
   font-size: 12px;

@@ -1,6 +1,6 @@
 import { useStore } from "../app/store";
 import { PanelActions } from "./PanelActions";
-import { LineNumbers, decorateWhitespace } from "./decorate";
+import { CodeMirrorEditor } from "./editor/CodeMirrorEditor";
 
 export function OutputPane() {
   const { lastSuccess, lastError } = useStore();
@@ -28,11 +28,15 @@ export function OutputPane() {
         </div>
       )}
 
-      <div className={`output-body${view.showLines ? " with-lines" : ""}`}>
-        {view.showLines && <LineNumbers text={raw} />}
-        <pre className="output-pre" data-testid="output">
-          {view.showWhitespaces ? decorateWhitespace(raw) : raw}
-        </pre>
+      <div className="output-body">
+        <CodeMirrorEditor
+          value={raw}
+          readOnly
+          showLines={view.showLines}
+          showWhitespaces={view.showWhitespaces}
+          ariaLabel="rendered output"
+          testId="output"
+        />
       </div>
 
       {lastSuccess && (
