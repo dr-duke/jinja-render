@@ -125,3 +125,46 @@ def test_user_data_overrides_emulated_hostfacts():
         timeout=TIMEOUT,
     )
     assert res.rendered == "user-host"
+
+
+def test_ansible_filter_available_in_ansible_mode():
+    res = render_template(
+        "{{ {'a': 1} | combine({'b': 2}) | to_json }}",
+        {},
+        RenderOptions(),
+        "ansible",
+        timeout=TIMEOUT,
+    )
+    assert res.rendered == '{"a": 1, "b": 2}'
+
+
+def test_ansible_filter_absent_in_base_mode():
+    # `combine` is an ansible-only filter; base mode must not expose it.
+    with pytest.raises(RenderError) as exc:
+        render_template(
+            "{{ {'a': 1} | combine({'b': 2}) }}",
+            {},
+            RenderOptions(),
+            "base",
+            timeout=TIMEOUT,
+        )
+    assert exc.value.type in {"template_runtime_error", "template_syntax_error"}
+
+
+def test_ansible_filter_absent_in_salt_mode():
+    with pytest.raises(RenderError):
+        render_template(
+            "{{ 'foo' | regex_replace('o', '0') }}",
+            {},
+            RenderOptions(),
+            "salt",
+            timeout=TIMEOUT,
+        )
+
+
+def test_common_filters_still_work_in_all_modes():
+    for mode in ("base", "ansible", "salt"):
+        res = render_template(
+            "{{ 'x' | hash('sha256') }}", {}, RenderOptions(), mode, timeout=TIMEOUT
+        )
+        assert len(res.rendered) == 64

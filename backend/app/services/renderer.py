@@ -16,7 +16,7 @@ from jinja2.sandbox import SandboxedEnvironment
 
 from ..core.config import get_settings
 from ..core.errors import RenderError
-from .filters import build_filters
+from .filters import filters_for_mode
 from .hostfacts import merge_facts
 
 RENDER_MODES = ["base", "ansible", "salt"]
@@ -52,7 +52,7 @@ def build_environment(options: RenderOptions, render_mode: str) -> SandboxedEnvi
         autoescape=False,
         keep_trailing_newline=True,
     )
-    env.filters.update(build_filters())
+    env.filters.update(filters_for_mode(render_mode))
     return env
 
 

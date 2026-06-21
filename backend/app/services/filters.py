@@ -7,9 +7,10 @@ from typing import Any
 import netaddr
 
 from ..core.errors import RenderError
+from .ansible_filters import ANSIBLE_FILTER_NAMES, build_ansible_filters
 
 # Filters exposed to templates in every render mode.
-FILTER_NAMES = ["hash", "ipaddr"]
+COMMON_FILTER_NAMES = ["hash", "ipaddr"]
 
 
 def _to_text(value: Any) -> str:
@@ -120,5 +121,26 @@ def do_ipaddr(value: Any, query: str | None = None) -> Any:
     return _ipaddr_query(value, query)
 
 
-def build_filters() -> dict[str, Any]:
+def build_common_filters() -> dict[str, Any]:
+    """Filters available in every render mode."""
     return {"hash": do_hash, "ipaddr": do_ipaddr}
+
+
+def filters_for_mode(render_mode: str) -> dict[str, Any]:
+    """Build the filter set for a render mode.
+
+    All modes get the common filters; ``ansible`` additionally gets the
+    emulated Templar filter set.
+    """
+    filters = build_common_filters()
+    if render_mode == "ansible":
+        filters.update(build_ansible_filters())
+    return filters
+
+
+def filter_names_for_mode(render_mode: str) -> list[str]:
+    """Names of filters enabled for a render mode (for meta/capabilities)."""
+    names = list(COMMON_FILTER_NAMES)
+    if render_mode == "ansible":
+        names += ANSIBLE_FILTER_NAMES
+    return names

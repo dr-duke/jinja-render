@@ -40,7 +40,10 @@ class RenderResponse(BaseModel):
 class CapabilitiesResponse(BaseModel):
     render_modes: list[str]
     options: list[str]
+    # Union of all filters across modes (backward-compatible flat list).
     filters: list[str]
+    # Filters available per render mode (ansible exposes the emulated set).
+    filters_by_mode: dict[str, list[str]] = {}
     data_formats: list[str]
 
 

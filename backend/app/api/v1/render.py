@@ -8,7 +8,7 @@ from ...core.config import get_settings
 from ...core.logging import get_logger
 from ...core.security import check_data_depth, check_payload_sizes
 from ...schemas.render import RenderMeta, RenderRequest, RenderResponse
-from ...services.filters import FILTER_NAMES
+from ...services.filters import filter_names_for_mode
 from ...services.parsers import parse_data
 from ...services.renderer import RenderOptions, render_template
 
@@ -65,7 +65,7 @@ def render(req: RenderRequest, request: Request) -> RenderResponse:
         meta=RenderMeta(
             data_format_detected=detected,
             render_mode_applied=req.render_mode,
-            filters_enabled=FILTER_NAMES,
+            filters_enabled=filter_names_for_mode(req.render_mode),
             duration_ms=duration_ms,
         ),
         warnings=result.warnings,
