@@ -14,7 +14,6 @@ export function ControlBar() {
     setOption,
     setAutoRender,
     render,
-    clearOutput,
   } = useStore();
 
   return (
@@ -37,27 +36,39 @@ export function ControlBar() {
       </div>
 
       <div className="control-group">
-        <Toggle label="Trim" checked={options.trim} onChange={(v) => setOption("trim", v)} />
-        <Toggle label="Lstrip" checked={options.lstrip} onChange={(v) => setOption("lstrip", v)} />
-        <Toggle label="Strict check" checked={options.strict} onChange={(v) => setOption("strict", v)} />
         <Toggle
-          label="Show whitespaces"
-          checked={options.show_whitespaces}
-          onChange={(v) => setOption("show_whitespaces", v)}
+          label="Trim"
+          checked={options.trim}
+          onChange={(v) => setOption("trim", v)}
+          title="Remove the first newline after template blocks."
         />
-        <Toggle label="Auto-render" checked={autoRender} onChange={setAutoRender} />
+        <Toggle
+          label="Lstrip"
+          checked={options.lstrip}
+          onChange={(v) => setOption("lstrip", v)}
+          title="Strip leading spaces and tabs before template blocks."
+        />
+        <Toggle
+          label="Strict check"
+          checked={options.strict}
+          onChange={(v) => setOption("strict", v)}
+          title="Fail rendering when a variable is missing."
+        />
+        <Toggle
+          label="Auto-render"
+          checked={autoRender}
+          onChange={setAutoRender}
+          title="Render automatically after edits or focus changes."
+        />
       </div>
 
       <div className="control-group actions">
         <button
-          className="btn btn-primary"
+          className="btn btn-primary btn-render"
           onClick={() => void render()}
           disabled={status === "loading"}
         >
           {status === "loading" ? "Rendering…" : "Render template"}
-        </button>
-        <button className="btn" onClick={clearOutput}>
-          Clear render
         </button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -33,14 +33,28 @@ const failure: RenderFailure = {
   meta: { duration_ms: 1 },
 };
 
+// Find the per-panel action block for a given panel by its header label.
+function panelActions(labelRe: RegExp): HTMLElement {
+  const header = screen.getByText(labelRe).closest(".panel-header") as HTMLElement;
+  return header.querySelector(".panel-actions") as HTMLElement;
+}
+
 beforeEach(() => {
+  localStorage.clear();
   // Reset store to defaults between tests.
   useStore.setState({
+    template: "Hosts:\n{% for host in hosts %}\n  - {{ host.name }}\n{% endfor %}\n",
+    data: "hosts:\n  - name: web-01\n",
     status: "idle",
     lastSuccess: null,
     lastError: null,
     options: { trim: true, lstrip: false, strict: true, show_whitespaces: false },
     renderMode: "base",
+    panelViews: {
+      template: { showLines: false, showWhitespaces: false },
+      data: { showLines: false, showWhitespaces: false },
+      output: { showLines: false, showWhitespaces: false },
+    },
     // Disable auto-render by default so explicit-trigger tests stay deterministic.
     autoRender: false,
   });
@@ -86,24 +100,97 @@ describe("Workbench", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("undefined_error");
   });
 
-  it("copy button copies raw output, not visualized", async () => {
-    vi.spyOn(api, "renderTemplate").mockResolvedValue(success);
+  it("render option switches render with English tooltips", () => {
     render(<App />);
-    // Enable whitespace visualization so displayed differs from raw.
-    await userEvent.click(screen.getByText("Show whitespaces"));
-    await userEvent.click(screen.getByRole("button", { name: /render template/i }));
-    await waitFor(() => expect(screen.getByTestId("output")).toHaveTextContent("Hello·world"));
-    await userEvent.click(screen.getByRole("button", { name: /copy/i }));
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("Hello world");
+    const trim = screen.getByText("Trim").closest(".switch") as HTMLElement;
+    expect(trim).toHaveAttribute(
+      "title",
+      "Remove the first newline after template blocks.",
+    );
+    expect(within(trim).getByRole("switch")).toBeInTheDocument();
+    const auto = screen.getByText("Auto-render").closest(".switch") as HTMLElement;
+    expect(auto).toHaveAttribute(
+      "title",
+      "Render automatically after edits or focus changes.",
+    );
   });
 
-  it("show whitespaces toggle changes presentation only", async () => {
+  it("header no longer has Show whitespaces or Clear render controls", () => {
+    render(<App />);
+    expect(screen.queryByText("Show whitespaces")).not.toBeInTheDocument();
+    expect(screen.queryByText("Clear render")).not.toBeInTheDocument();
+  });
+
+  it("output copy button copies raw output without whitespace markers", async () => {
     vi.spyOn(api, "renderTemplate").mockResolvedValue(success);
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: /render template/i }));
     await waitFor(() => expect(screen.getByTestId("output")).toHaveTextContent("Hello world"));
-    await userEvent.click(screen.getByText("Show whitespaces"));
-    expect(screen.getByTestId("output")).toHaveTextContent("Hello·world");
+    // Turn on per-panel whitespace visualization for the output panel.
+    const actions = panelActions(/rendered output/i);
+    await userEvent.click(within(actions).getByRole("button", { name: /show whitespaces/i }));
+    // Markers are present visually but copy still yields the raw text.
+    await userEvent.click(within(actions).getByRole("button", { name: /copy/i }));
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("Hello world");
+  });
+
+  it("per-panel whitespace toggle adds decorative markers to output", async () => {
+    vi.spyOn(api, "renderTemplate").mockResolvedValue({
+      ...success,
+      rendered: "a b",
+    });
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: /render template/i }));
+    await waitFor(() => expect(screen.getByTestId("output")).toHaveTextContent("a b"));
+    const actions = panelActions(/rendered output/i);
+    await userEvent.click(within(actions).getByRole("button", { name: /show whitespaces/i }));
+    // The decorative glyph appears; it is aria-hidden so not part of raw text.
+    const pre = screen.getByTestId("output");
+    expect(pre.querySelector(".ws-glyph")).not.toBeNull();
+  });
+
+  it("output line-numbers toggle shows a decorative gutter for that panel only", async () => {
+    vi.spyOn(api, "renderTemplate").mockResolvedValue(success);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: /render template/i }));
+    await waitFor(() => expect(screen.getByTestId("output")).toHaveTextContent("Hello world"));
+    const outputActions = panelActions(/rendered output/i);
+    await userEvent.click(within(outputActions).getByRole("button", { name: /line numbers/i }));
+    expect(document.querySelectorAll(".line-numbers").length).toBe(1);
+  });
+
+  it("template Clear empties the template editor only", async () => {
+    render(<App />);
+    const actions = panelActions(/^Template \(Jinja2\)$/);
+    await userEvent.click(within(actions).getByRole("button", { name: /clear/i }));
+    const tmpl = screen.getByLabelText("template") as HTMLTextAreaElement;
+    expect(tmpl.value).toBe("");
+    const data = screen.getByLabelText("data") as HTMLTextAreaElement;
+    expect(data.value).not.toBe("");
+  });
+
+  it("output Clear removes displayed render but keeps editors", async () => {
+    vi.spyOn(api, "renderTemplate").mockResolvedValue(success);
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: /render template/i }));
+    await waitFor(() => expect(screen.getByTestId("output")).toHaveTextContent("Hello world"));
+    const actions = panelActions(/rendered output/i);
+    await userEvent.click(within(actions).getByRole("button", { name: /clear/i }));
+    expect(screen.getByTestId("output")).toHaveTextContent("");
+    const tmpl = screen.getByLabelText("template") as HTMLTextAreaElement;
+    expect(tmpl.value).not.toBe("");
+  });
+
+  it("per-panel toggles persist to localStorage", async () => {
+    render(<App />);
+    const actions = panelActions(/rendered output/i);
+    await userEvent.click(within(actions).getByRole("button", { name: /line numbers/i }));
+    await waitFor(() => {
+      const raw = localStorage.getItem("jinja-render:v1:workspace-state");
+      expect(raw).toBeTruthy();
+      const parsed = JSON.parse(raw as string);
+      expect(parsed.panelViews.output.showLines).toBe(true);
+    });
   });
 
   it("auto-render triggers a render on editor blur when enabled", async () => {

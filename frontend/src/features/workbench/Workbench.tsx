@@ -99,6 +99,7 @@ export function Workbench() {
           <div className="pane pane-template" style={{ height: `${templateRowPct}%` }}>
             <Editor
               label="Template (Jinja2)"
+              panel="template"
               value={template}
               onChange={setTemplate}
               onBlur={onEditorBlur}
@@ -115,6 +116,7 @@ export function Workbench() {
           <div className="pane pane-data" style={{ height: `${100 - templateRowPct}%` }}>
             <Editor
               label="Data (YAML / JSON)"
+              panel="data"
               value={data}
               onChange={setData}
               onBlur={onEditorBlur}

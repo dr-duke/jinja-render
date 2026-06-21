@@ -1,34 +1,18 @@
-import { useState } from "react";
 import { useStore } from "../app/store";
+import { PanelActions } from "./PanelActions";
+import { LineNumbers, decorateWhitespace } from "./decorate";
 
 export function OutputPane() {
-  const { lastSuccess, lastError, options } = useStore();
-  const [copied, setCopied] = useState(false);
+  const { lastSuccess, lastError } = useStore();
+  const view = useStore((s) => s.panelViews.output);
 
   const raw = lastSuccess?.rendered ?? "";
-  const displayed =
-    options.show_whitespaces && lastSuccess
-      ? lastSuccess.rendered_visualized
-      : raw;
-
-  const copy = async () => {
-    // Copy always copies the raw rendered text, never the visualized form.
-    await navigator.clipboard.writeText(raw);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
 
   return (
     <div className="output">
-      <div className="output-header">
+      <div className="panel-header">
         <span className="editor-label">Rendered output</span>
-        <button
-          className="btn btn-small"
-          onClick={() => void copy()}
-          disabled={!lastSuccess}
-        >
-          {copied ? "Copied!" : "Copy"}
-        </button>
+        <PanelActions panel="output" getRawText={() => raw} canCopy={!!lastSuccess} />
       </div>
 
       {lastError && (
@@ -44,9 +28,12 @@ export function OutputPane() {
         </div>
       )}
 
-      <pre className="output-pre" data-testid="output">
-        {displayed}
-      </pre>
+      <div className={`output-body${view.showLines ? " with-lines" : ""}`}>
+        {view.showLines && <LineNumbers text={raw} />}
+        <pre className="output-pre" data-testid="output">
+          {view.showWhitespaces ? decorateWhitespace(raw) : raw}
+        </pre>
+      </div>
 
       {lastSuccess && (
         <div className="output-meta">
