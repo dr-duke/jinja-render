@@ -60,9 +60,11 @@ export function ControlBar() {
     options,
     status,
     autoRender,
+    autocompleteEnabled,
     setRenderMode,
     setOption,
     setAutoRender,
+    setAutocompleteEnabled,
     render,
     exportState,
     importState,
@@ -125,6 +127,12 @@ export function ControlBar() {
       </div>
 
       <div className="control-group">
+        <Toggle
+          label="Hints"
+          checked={autocompleteEnabled}
+          onChange={setAutocompleteEnabled}
+          title="Enable Jinja autocomplete and inline help in the template editor."
+        />
         <Toggle
           label="Trim"
           checked={options.trim}

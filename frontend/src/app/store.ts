@@ -55,6 +55,7 @@ export interface PersistedState {
   renderMode: RenderMode;
   options: RenderOptions;
   autoRender: boolean;
+  autocompleteEnabled: boolean;
   panelViews: PanelViews;
 }
 
@@ -70,6 +71,7 @@ interface WorkbenchState {
   lastSuccess: RenderSuccess | null;
   lastError: RenderFailure | null;
   autoRender: boolean;
+  autocompleteEnabled: boolean;
   panelViews: PanelViews;
 
   setTemplate: (v: string) => void;
@@ -78,6 +80,7 @@ interface WorkbenchState {
   setRenderMode: (v: RenderMode) => void;
   setOption: (key: keyof RenderOptions, value: boolean) => void;
   setAutoRender: (v: boolean) => void;
+  setAutocompleteEnabled: (v: boolean) => void;
   setPanelView: (panel: PanelId, key: keyof PanelView, value: boolean) => void;
   loadExample: (template: string, data: string, mode: RenderMode, fmt: DataFormat) => void;
   clearPanel: (panel: PanelId) => void;
@@ -138,6 +141,8 @@ export function validatePersisted(parsed: unknown): Partial<WorkbenchState> | nu
     };
   }
   if (typeof p.autoRender === "boolean") restored.autoRender = p.autoRender;
+  if (typeof p.autocompleteEnabled === "boolean")
+    restored.autocompleteEnabled = p.autocompleteEnabled;
   restored.panelViews = mergePanelViews(p.panelViews);
   return restored;
 }
@@ -183,6 +188,7 @@ function toPersisted(s: WorkbenchState): PersistedState {
     renderMode: s.renderMode,
     options: s.options,
     autoRender: s.autoRender,
+    autocompleteEnabled: s.autocompleteEnabled,
     panelViews: s.panelViews,
   };
 }
@@ -209,6 +215,7 @@ export const useStore = create<WorkbenchState>((set, get) => ({
   lastSuccess: null,
   lastError: null,
   autoRender: AUTO_RENDER_DEFAULT,
+  autocompleteEnabled: false,
   panelViews: DEFAULT_PANEL_VIEWS,
   ...persistedDefaults,
 
@@ -219,6 +226,7 @@ export const useStore = create<WorkbenchState>((set, get) => ({
   setOption: (key, value) =>
     set((s) => ({ options: { ...s.options, [key]: value } })),
   setAutoRender: (v) => set({ autoRender: v }),
+  setAutocompleteEnabled: (v) => set({ autocompleteEnabled: v }),
   setPanelView: (panel, key, value) =>
     set((s) => ({
       panelViews: { ...s.panelViews, [panel]: { ...s.panelViews[panel], [key]: value } },

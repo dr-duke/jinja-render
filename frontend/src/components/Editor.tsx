@@ -20,6 +20,7 @@ interface EditorProps {
 export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: EditorProps) {
   const view = useStore((s) => s.panelViews[panel]);
   const dataFormat = useStore((s) => s.dataFormat);
+  const autocompleteEnabled = useStore((s) => s.autocompleteEnabled);
 
   // Template panel highlights Jinja2; data panel highlights JSON when the format
   // is explicitly json, otherwise YAML (covers "yaml" and "auto").
@@ -28,17 +29,18 @@ export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: Edi
     return dataFormat === "json" ? json() : yaml();
   }, [panel, dataFormat]);
 
-  // Autocomplete is only attached to the template panel. The completion env reads
-  // live store state lazily, so the extension is stable (built once) and never
-  // forces the editor to be recreated.
+  // Autocomplete is only attached to the template panel, and only when the user
+  // has enabled it (off by default). The completion env reads live store state
+  // lazily, so the extension is stable; toggling the switch reconfigures the
+  // editor's compartment (connect/disconnect) without recreating the view.
   const extraExtensions = useMemo(() => {
-    if (panel !== "template") return undefined;
+    if (panel !== "template" || !autocompleteEnabled) return undefined;
     return jinjaAutocomplete({
       getData: () => useStore.getState().data,
       getDataFormat: () => useStore.getState().dataFormat,
       getRenderMode: () => useStore.getState().renderMode,
     });
-  }, [panel]);
+  }, [panel, autocompleteEnabled]);
 
   return (
     <div className="editor">
