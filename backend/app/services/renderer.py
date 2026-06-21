@@ -27,7 +27,6 @@ class RenderOptions:
     trim: bool = True
     lstrip: bool = False
     strict: bool = True
-    show_whitespaces: bool = False
 
 
 @dataclass

@@ -7,7 +7,7 @@ def _render(client, **kwargs):
         "data": "name: world",
         "data_format": "auto",
         "render_mode": "base",
-        "options": {"trim": True, "lstrip": False, "strict": True, "show_whitespaces": False},
+        "options": {"trim": True, "lstrip": False, "strict": True},
     }
     body.update(kwargs)
     return client.post("/api/v1/render", json=body)
@@ -24,10 +24,32 @@ def test_render_success(client):
     assert "hash" in data["meta"]["filters_enabled"]
 
 
-def test_render_visualized_field(client):
+def test_render_response_has_no_backend_whitespace_field(client):
+    # Whitespace visualization is frontend-only now: the backend returns only the
+    # raw rendered text and must not emit a visualized variant.
     resp = _render(client, template="a b", data="{}")
     assert resp.status_code == 200
-    assert resp.json()["rendered_visualized"] == "a·b"
+    body = resp.json()
+    assert body["rendered"] == "a b"
+    assert "rendered_visualized" not in body
+
+
+def test_render_ignores_legacy_show_whitespaces_option(client):
+    # Older clients may still send show_whitespaces; it must be ignored, not error.
+    resp = _render(
+        client,
+        template="a b",
+        data="{}",
+        options={"trim": True, "lstrip": False, "strict": True, "show_whitespaces": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["rendered"] == "a b"
+
+
+def test_capabilities_omits_show_whitespaces(client):
+    resp = client.get("/api/v1/capabilities")
+    assert resp.status_code == 200
+    assert resp.json()["options"] == ["trim", "lstrip", "strict"]
 
 
 def test_render_undefined_error(client):
@@ -120,7 +142,7 @@ def test_rate_limit_returns_429(rate_limited_client):
         "data": "{}",
         "data_format": "auto",
         "render_mode": "base",
-        "options": {"trim": True, "lstrip": False, "strict": True, "show_whitespaces": False},
+        "options": {"trim": True, "lstrip": False, "strict": True},
     }
     statuses = [
         rate_limited_client.post("/api/v1/render", json=body).status_code

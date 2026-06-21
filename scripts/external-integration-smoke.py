@@ -74,7 +74,7 @@ def check(name: str, method: str, url: str, body: dict | None = None,
 
 
 def render_body(template: str, data: str, **opts) -> dict:
-    options = {"trim": True, "lstrip": False, "strict": True, "show_whitespaces": False}
+    options = {"trim": True, "lstrip": False, "strict": True}
     options.update(opts.pop("options", {}))
     base = {
         "template": template,
@@ -118,9 +118,12 @@ def main() -> int:
     check("render ipaddr filter", "POST", f"{BACKEND}/api/v1/render",
           render_body("{{ '192.0.2.1/24' | ipaddr('network') }}", "{}"),
           contains="192.0.2.0")
-    check("render whitespace visualization", "POST", f"{BACKEND}/api/v1/render",
+    # Whitespace visualization is frontend-only now: the backend returns the raw
+    # text and no visualized variant. A legacy show_whitespaces flag is ignored.
+    check("render returns raw (no backend whitespace viz)", "POST",
+          f"{BACKEND}/api/v1/render",
           render_body("a b", "{}", options={"show_whitespaces": True}),
-          contains="a·b")
+          contains="\"rendered\": \"a b\"")
 
     failed = [name for ok, name in results if not ok]
     print()

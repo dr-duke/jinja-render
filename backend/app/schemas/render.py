@@ -12,7 +12,6 @@ class RenderOptionsIn(BaseModel):
     trim: bool = True
     lstrip: bool = False
     strict: bool = True
-    show_whitespaces: bool = False
 
 
 class RenderRequest(BaseModel):
@@ -33,7 +32,6 @@ class RenderMeta(BaseModel):
 class RenderResponse(BaseModel):
     success: bool = True
     rendered: str
-    rendered_visualized: str
     data_parsed: Any
     meta: RenderMeta
     warnings: list[str] = []

@@ -10,7 +10,6 @@ import type { RenderSuccess, RenderFailure } from "../types/api";
 const success: RenderSuccess = {
   success: true,
   rendered: "Hello world",
-  rendered_visualized: "Hello·world",
   data_parsed: { name: "world" },
   meta: {
     data_format_detected: "yaml",
@@ -48,7 +47,7 @@ beforeEach(() => {
     status: "idle",
     lastSuccess: null,
     lastError: null,
-    options: { trim: true, lstrip: false, strict: true, show_whitespaces: false },
+    options: { trim: true, lstrip: false, strict: true },
     renderMode: "base",
     panelViews: {
       template: { showLines: false, showWhitespaces: false },

@@ -11,7 +11,6 @@ from ...schemas.render import RenderMeta, RenderRequest, RenderResponse
 from ...services.filters import FILTER_NAMES
 from ...services.parsers import parse_data
 from ...services.renderer import RenderOptions, render_template
-from ...services.whitespace import visualize
 
 router = APIRouter()
 logger = get_logger()
@@ -37,7 +36,6 @@ def render(req: RenderRequest, request: Request) -> RenderResponse:
         trim=req.options.trim,
         lstrip=req.options.lstrip,
         strict=req.options.strict,
-        show_whitespaces=req.options.show_whitespaces,
     )
     result = render_template(
         req.template,
@@ -63,7 +61,6 @@ def render(req: RenderRequest, request: Request) -> RenderResponse:
 
     return RenderResponse(
         rendered=result.rendered,
-        rendered_visualized=visualize(result.rendered),
         data_parsed=data_parsed,
         meta=RenderMeta(
             data_format_detected=detected,

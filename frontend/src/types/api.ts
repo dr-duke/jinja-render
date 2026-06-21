@@ -5,7 +5,6 @@ export interface RenderOptions {
   trim: boolean;
   lstrip: boolean;
   strict: boolean;
-  show_whitespaces: boolean;
 }
 
 export interface RenderRequest {
@@ -26,7 +25,6 @@ export interface RenderMeta {
 export interface RenderSuccess {
   success: true;
   rendered: string;
-  rendered_visualized: string;
   data_parsed: unknown;
   meta: RenderMeta;
   warnings: string[];

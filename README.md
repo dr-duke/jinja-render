@@ -16,7 +16,9 @@ visualization.
 - Data input as **YAML**, **JSON**, or **auto** (JSON tried first, then YAML).
 - Render modes: `base`, `ansible`, `salt` (see *Compatibility limitations*).
 - Options: `trim` → `trim_blocks`, `lstrip` → `lstrip_blocks`, `strict` → strict
-  undefined behavior, `show_whitespaces` → derived visualization.
+  undefined behavior.
+- Per-panel **whitespace visualization** (frontend-only) and line numbers, toggled
+  independently for the template, data, and output panels.
 - Custom filters: `hash(algorithm)` and `ipaddr(query)` (always available in
   templates; not surfaced as a UI control).
 - Copy raw output, clear output (editors preserved), `Ctrl/Cmd+Enter` to render.
@@ -91,9 +93,11 @@ serves the API and the static SPA together on container port 8000. The
 
 - All Jinja evaluation lives **only in the backend**. The frontend never
   interprets Jinja semantics; it sends a request and renders the response.
-- Whitespace visualization is computed on the backend (`rendered_visualized`),
-  and the frontend simply chooses which string to display. The raw rendered text
-  is never mutated, and **Copy always copies raw output**.
+- Whitespace visualization is **frontend-only**: the backend returns the raw
+  `rendered` text (no `rendered_visualized` field, no `show_whitespaces` option),
+  and the frontend overlays decorative markers per panel. The raw text is never
+  mutated, and **Copy always copies raw output** (markers and line numbers are
+  non-selectable and never reach the clipboard).
 
 ## API
 
@@ -109,7 +113,7 @@ Request:
   "data": "name: world",
   "data_format": "auto",
   "render_mode": "base",
-  "options": { "trim": true, "lstrip": false, "strict": true, "show_whitespaces": false }
+  "options": { "trim": true, "lstrip": false, "strict": true }
 }
 ```
 
@@ -119,7 +123,6 @@ Success `200`:
 {
   "success": true,
   "rendered": "Hello world",
-  "rendered_visualized": "Hello·world",
   "data_parsed": { "name": "world" },
   "meta": {
     "data_format_detected": "yaml",
@@ -196,16 +199,19 @@ crashes — it returns `False`.
 
 ## Whitespace visualization
 
-When `show_whitespaces` is enabled, the displayed output uses visible markers:
+Whitespace visualization is **frontend-only** — the backend is not involved and
+returns only the raw `rendered` text. Each panel (template, data, output) has its
+own `Show whitespaces` toggle that overlays visible markers:
 
 | char | marker |
 |------|--------|
 | space | `·` |
 | tab | `⇥` |
 | newline | `↵` (kept on its line) |
-| carriage return | `␍` |
 
-The raw output is unchanged and remains what Copy copies.
+The raw output is unchanged. Markers (and line numbers) are decorative,
+non-selectable elements, so neither drag-selection nor Copy ever picks them up —
+Copy always yields the raw text.
 
 ## Security assumptions and limitations
 

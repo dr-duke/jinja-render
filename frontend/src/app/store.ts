@@ -142,7 +142,6 @@ function loadPersisted(): Partial<WorkbenchState> | null {
         trim: !!parsed.options.trim,
         lstrip: !!parsed.options.lstrip,
         strict: !!parsed.options.strict,
-        show_whitespaces: !!parsed.options.show_whitespaces,
       };
     }
     if (typeof parsed.autoRender === "boolean") restored.autoRender = parsed.autoRender;
@@ -188,7 +187,7 @@ export const useStore = create<WorkbenchState>((set, get) => ({
   data: DEFAULT_DATA,
   dataFormat: "auto",
   renderMode: "base",
-  options: { trim: true, lstrip: false, strict: true, show_whitespaces: false },
+  options: { trim: true, lstrip: false, strict: true },
   status: "idle",
   lastSuccess: null,
   lastError: null,

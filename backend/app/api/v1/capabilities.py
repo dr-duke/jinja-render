@@ -13,7 +13,7 @@ router = APIRouter()
 def capabilities() -> CapabilitiesResponse:
     return CapabilitiesResponse(
         render_modes=RENDER_MODES,
-        options=["trim", "lstrip", "strict", "show_whitespaces"],
+        options=["trim", "lstrip", "strict"],
         filters=FILTER_NAMES,
         data_formats=["auto", "yaml", "json"],
     )
