@@ -45,8 +45,9 @@ const STORAGE_KEY = "jinja-render:v1:workspace-state";
 const SCHEMA_VERSION = 1;
 const SAVE_DEBOUNCE_MS = 400;
 
-// Shape persisted to localStorage. Derived/server output is never persisted.
-interface PersistedState {
+// Shape persisted to localStorage (and to exported workspace files). Derived /
+// server output is never persisted.
+export interface PersistedState {
   version: number;
   template: string;
   data: string;
@@ -56,6 +57,8 @@ interface PersistedState {
   autoRender: boolean;
   panelViews: PanelViews;
 }
+
+export { SCHEMA_VERSION };
 
 interface WorkbenchState {
   template: string;
@@ -79,6 +82,8 @@ interface WorkbenchState {
   loadExample: (template: string, data: string, mode: RenderMode, fmt: DataFormat) => void;
   clearPanel: (panel: PanelId) => void;
   render: () => Promise<void>;
+  exportState: () => PersistedState;
+  importState: (parsed: unknown) => boolean;
 }
 
 function hasStorage(): boolean {
@@ -109,6 +114,34 @@ function mergePanelViews(raw: unknown): PanelViews {
   return result;
 }
 
+// Validate and coerce an already-parsed object into a partial workbench state.
+// Returns null when the object is missing or its schema version is incompatible.
+// Used both for localStorage restore and for importing workspace files, so the
+// two paths can never drift apart.
+export function validatePersisted(parsed: unknown): Partial<WorkbenchState> | null {
+  if (!parsed || typeof parsed !== "object") return null;
+  const p = parsed as Partial<PersistedState>;
+  if (p.version !== SCHEMA_VERSION) return null;
+
+  const restored: Partial<WorkbenchState> = {};
+  if (typeof p.template === "string") restored.template = p.template;
+  if (typeof p.data === "string") restored.data = p.data;
+  if (p.dataFormat === "auto" || p.dataFormat === "yaml" || p.dataFormat === "json")
+    restored.dataFormat = p.dataFormat;
+  if (p.renderMode === "base" || p.renderMode === "ansible" || p.renderMode === "salt")
+    restored.renderMode = p.renderMode;
+  if (p.options && typeof p.options === "object") {
+    restored.options = {
+      trim: !!p.options.trim,
+      lstrip: !!p.options.lstrip,
+      strict: !!p.options.strict,
+    };
+  }
+  if (typeof p.autoRender === "boolean") restored.autoRender = p.autoRender;
+  restored.panelViews = mergePanelViews(p.panelViews);
+  return restored;
+}
+
 // Read persisted state at startup. Corrupt/incompatible state is ignored (and
 // cleared) so a bad record never breaks the app.
 function loadPersisted(): Partial<WorkbenchState> | null {
@@ -121,8 +154,8 @@ function loadPersisted(): Partial<WorkbenchState> | null {
   }
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as Partial<PersistedState>;
-    if (!parsed || parsed.version !== SCHEMA_VERSION) {
+    const restored = validatePersisted(JSON.parse(raw));
+    if (!restored) {
       try {
         window.localStorage.removeItem(STORAGE_KEY);
       } catch {
@@ -130,22 +163,6 @@ function loadPersisted(): Partial<WorkbenchState> | null {
       }
       return null;
     }
-    const restored: Partial<WorkbenchState> = {};
-    if (typeof parsed.template === "string") restored.template = parsed.template;
-    if (typeof parsed.data === "string") restored.data = parsed.data;
-    if (parsed.dataFormat === "auto" || parsed.dataFormat === "yaml" || parsed.dataFormat === "json")
-      restored.dataFormat = parsed.dataFormat;
-    if (parsed.renderMode === "base" || parsed.renderMode === "ansible" || parsed.renderMode === "salt")
-      restored.renderMode = parsed.renderMode;
-    if (parsed.options && typeof parsed.options === "object") {
-      restored.options = {
-        trim: !!parsed.options.trim,
-        lstrip: !!parsed.options.lstrip,
-        strict: !!parsed.options.strict,
-      };
-    }
-    if (typeof parsed.autoRender === "boolean") restored.autoRender = parsed.autoRender;
-    restored.panelViews = mergePanelViews(parsed.panelViews);
     return restored;
   } catch {
     try {
@@ -212,6 +229,21 @@ export const useStore = create<WorkbenchState>((set, get) => ({
     if (panel === "template") set({ template: "" });
     else if (panel === "data") set({ data: "" });
     else set({ lastSuccess: null, lastError: null, status: "idle" });
+  },
+
+  // Snapshot of the persistable workspace (same shape as localStorage). Never
+  // includes the rendered output / server response.
+  exportState: () => toPersisted(get()),
+
+  // Apply an imported workspace object. Returns false (leaving current state
+  // untouched) when the object fails schema validation, so a bad file can never
+  // corrupt the in-memory workspace. On success the new state is also persisted.
+  importState: (parsed) => {
+    const restored = validatePersisted(parsed);
+    if (!restored) return false;
+    set(restored);
+    writePersisted(get());
+    return true;
   },
 
   render: async () => {

@@ -161,6 +161,25 @@ select {
   border-color: var(--accent);
   color: #fff;
 }
+/* Inline save/load feedback shown next to the action buttons. */
+.controlbar-error {
+  color: var(--danger, #d33);
+  font-size: 13px;
+  max-width: 320px;
+}
+/* Visually removed but kept in the accessibility tree (hidden file input). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
