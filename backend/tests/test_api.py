@@ -77,7 +77,12 @@ def test_capabilities(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["render_modes"] == ["base", "ansible", "salt"]
-    assert data["filters"] == ["hash", "ipaddr"]
+    # Common filters are present in every mode.
+    assert {"hash", "ipaddr"} <= set(data["filters"])
+    # ansible mode additionally exposes the emulated Templar filter set.
+    assert data["filters_by_mode"]["base"] == ["hash", "ipaddr"]
+    assert "combine" in data["filters_by_mode"]["ansible"]
+    assert "combine" not in data["filters_by_mode"]["salt"]
 
 
 def test_examples(client):
