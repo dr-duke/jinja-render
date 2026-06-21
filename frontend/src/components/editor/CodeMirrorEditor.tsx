@@ -4,6 +4,7 @@ import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { editorTheme } from "./theme";
 import { whitespaceExtension } from "./whitespace";
+import { indentKeymap } from "./indent";
 
 interface CodeMirrorEditorProps {
   value: string;
@@ -71,6 +72,11 @@ export function CodeMirrorEditor({
       doc: value,
       extensions: [
         history(),
+        // Editable input panels get two-space block indent on Tab / Shift+Tab.
+        // This keymap has higher precedence than defaultKeymap so it captures Tab
+        // before any default handler. The read-only output panel never gets it,
+        // so Tab keeps its native focus-traversal behavior there.
+        ...(readOnly ? [] : [indentKeymap()]),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         editorTheme(),
         EditorView.lineWrapping,
