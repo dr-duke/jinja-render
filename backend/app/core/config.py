@@ -18,6 +18,18 @@ class Settings(BaseSettings):
     app_name: str = "jinja-render"
     debug: bool = False
 
+    # Project metadata surfaced via GET /api/v1/info (and the OpenAPI version).
+    # `version` is the single source of truth for the running version; CI sets it
+    # from the pushed git tag (e.g. JR_version=0.0.3). Default tracks the current
+    # release.
+    version: str = "0.0.2"
+    description: str = (
+        "A safe, local-first Jinja2 playground: render templates against "
+        "YAML/JSON data with structured diagnostics."
+    )
+    repository_url: str = "https://github.com/dr-duke/jinja-render"
+    license_name: str = "MIT"
+
     # Guardrails (sizes in bytes).
     max_template_bytes: int = 512 * 1024  # 512 KB
     max_data_bytes: int = 1024 * 1024  # 1 MB

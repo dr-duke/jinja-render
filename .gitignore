@@ -17,6 +17,10 @@ frontend/*.tsbuildinfo
 
 # Specification / internal docs (kept out of the public repo)
 docs/
+spec/
+
+# Local cluster deployment values (environment-specific; not committed)
+k8s/values-nxs-universal-chart.yaml
 
 # Claude Code instructions (not part of the published project)
 CLAUDE.md

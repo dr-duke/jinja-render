@@ -5,23 +5,57 @@ import type {
 } from "@codemirror/autocomplete";
 import { autocompletion } from "@codemirror/autocomplete";
 import type { Extension } from "@codemirror/state";
-import type { DataFormat, RenderMode } from "../../types/api";
+import type { Capabilities, DataFormat, RenderMode } from "../../types/api";
 import { extractVariablePaths } from "./vars";
 import {
-  ANSIBLE_FACTS,
-  FILTERS,
+  ANSIBLE_FACTS_FALLBACK,
+  BUILTIN_FILTERS,
   KEYWORDS,
+  PROJECT_FILTERS_FALLBACK,
   SNIPPETS,
   TESTS,
 } from "./jinjaData";
 
 // Provider of the live editor context the completion source needs. Read lazily
 // so completions always reflect the current Data panel and render mode without
-// rebuilding the editor extension.
+// rebuilding the editor extension. getCapabilities is optional: when present and
+// loaded, project filters and ansible facts come from the backend (accurate
+// per-mode set with descriptions); otherwise static fallbacks are used.
 export interface CompletionEnv {
   getData: () => string;
   getDataFormat: () => DataFormat;
   getRenderMode: () => RenderMode;
+  getCapabilities?: () => Capabilities | null;
+}
+
+// Project/emulated filters available after `|`: Jinja2 builtins (always) plus the
+// backend filter set for the current mode (or a static fallback before
+// /capabilities loads). The ansible mode thus surfaces the full emulated Templar
+// set (combine, regex_*, set ops, …) with one-line descriptions from the server.
+function filterCompletions(env: CompletionEnv): Completion[] {
+  const caps = env.getCapabilities?.() ?? null;
+  if (!caps) return [...BUILTIN_FILTERS, ...PROJECT_FILTERS_FALLBACK];
+  const names = caps.filtersByMode[env.getRenderMode()] ?? [];
+  const project: Completion[] = names.map((name) => ({
+    label: name,
+    type: "function",
+    detail: "filter · project",
+    info: caps.filterDescriptions[name] ?? `Project filter: ${name}`,
+  }));
+  return [...BUILTIN_FILTERS, ...project];
+}
+
+// Emulated ansible facts (offered only in ansible mode), from the backend when
+// available, else the static fallback.
+function factCompletions(env: CompletionEnv): Completion[] {
+  const caps = env.getCapabilities?.() ?? null;
+  if (!caps || caps.ansibleFacts.length === 0) return ANSIBLE_FACTS_FALLBACK;
+  return caps.ansibleFacts.map((name) => ({
+    label: name,
+    type: "variable",
+    detail: "ansible fact",
+    info: `Emulated, static host fact (ansible mode); user data overrides it: ${name}`,
+  }));
 }
 
 // Determine whether the cursor sits inside a Jinja delimiter, and which kind.
@@ -29,27 +63,16 @@ export interface CompletionEnv {
 type DelimKind = "expr" | "stmt" | "comment" | null;
 
 function delimiterContext(before: string): DelimKind {
-  const openExpr = before.lastIndexOf("{{");
-  const openStmt = before.lastIndexOf("{%");
-  const openComment = before.lastIndexOf("{#");
-  const closeExpr = before.lastIndexOf("}}");
-  const closeStmt = before.lastIndexOf("%}");
-  const closeComment = before.lastIndexOf("#}");
-
-  const open = Math.max(openExpr, openStmt, openComment);
-  if (open === -1) return null;
-  // If a matching close occurs after the most recent open, we're outside.
-  if (open === openComment && open > closeComment) return "comment";
-  if (open === openExpr && open > closeExpr && openExpr >= openStmt) return "expr";
-  if (open === openStmt && open > closeStmt && openStmt >= openExpr) return "stmt";
-  // Re-evaluate precisely: pick the latest open and check its own close.
-  if (openExpr >= openStmt && openExpr >= openComment) {
-    return openExpr > closeExpr ? "expr" : null;
-  }
-  if (openStmt >= openExpr && openStmt >= openComment) {
-    return openStmt > closeStmt ? "stmt" : null;
-  }
-  return openComment > closeComment ? "comment" : null;
+  // Find the most recent opening marker; we're inside it only if its matching
+  // closing marker does not appear after it.
+  const opens: { pos: number; kind: Exclude<DelimKind, null>; close: string }[] = [
+    { pos: before.lastIndexOf("{{"), kind: "expr", close: "}}" },
+    { pos: before.lastIndexOf("{%"), kind: "stmt", close: "%}" },
+    { pos: before.lastIndexOf("{#"), kind: "comment", close: "#}" },
+  ];
+  const latest = opens.reduce((a, b) => (b.pos > a.pos ? b : a));
+  if (latest.pos === -1) return null;
+  return before.lastIndexOf(latest.close) > latest.pos ? null : latest.kind;
 }
 
 function varCompletions(env: CompletionEnv): Completion[] {
@@ -88,7 +111,7 @@ export function makeJinjaCompletionSource(env: CompletionEnv): SyncCompletionSou
     const pipeMatch = before.match(/\|\s*(\w*)$/);
     if (pipeMatch) {
       const from = ctx.pos - pipeMatch[1].length;
-      return { from, options: FILTERS, validFor: /^\w*$/ };
+      return { from, options: filterCompletions(env), validFor: /^\w*$/ };
     }
 
     // After `is`: tests.
@@ -127,7 +150,7 @@ export function makeJinjaCompletionSource(env: CompletionEnv): SyncCompletionSou
     options.push(...varCompletions(env));
     if (kind === "stmt") options.push(...KEYWORDS);
     options.push(...SNIPPETS);
-    if (env.getRenderMode() === "ansible") options.push(...ANSIBLE_FACTS);
+    if (env.getRenderMode() === "ansible") options.push(...factCompletions(env));
     // A few constants/operators useful in expressions.
     if (kind === "expr") {
       options.push(

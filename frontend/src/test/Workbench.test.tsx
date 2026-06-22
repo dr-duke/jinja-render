@@ -47,7 +47,7 @@ beforeEach(() => {
     status: "idle",
     lastSuccess: null,
     lastError: null,
-    options: { trim: true, lstrip: false, strict: true },
+    options: { trim: true, lstrip: false },
     renderMode: "base",
     panelViews: {
       template: { showLines: false, showWhitespaces: false },
@@ -99,15 +99,15 @@ describe("Workbench", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("undefined_error");
   });
 
-  it("render option switches render with English tooltips", () => {
+  it("render option toggles render as buttons with English tooltips", () => {
     render(<App />);
-    const trim = screen.getByText("Trim").closest(".switch") as HTMLElement;
+    const trim = screen.getByRole("button", { name: "Trim" });
     expect(trim).toHaveAttribute(
       "title",
       "Remove the first newline after template blocks.",
     );
-    expect(within(trim).getByRole("switch")).toBeInTheDocument();
-    const auto = screen.getByText("Auto-render").closest(".switch") as HTMLElement;
+    expect(trim).toHaveAttribute("aria-pressed");
+    const auto = screen.getByRole("button", { name: "Auto-render" });
     expect(auto).toHaveAttribute(
       "title",
       "Render automatically after edits or focus changes.",

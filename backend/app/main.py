@@ -16,7 +16,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 
-from .api.v1 import capabilities, examples, render
+from .api.v1 import capabilities, examples, info, render
 from .core.config import Settings, get_settings
 from .core.errors import RenderError
 from .core.logging import configure_logging, get_logger
@@ -40,7 +40,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         debug=settings.debug,
-        version="1.0.0",
+        version=settings.version,
         docs_url=None,
         redoc_url=None,
         openapi_url=settings.openapi_url,
@@ -172,6 +172,7 @@ def create_app() -> FastAPI:
     app.include_router(render.router, prefix=API_PREFIX, tags=["render"])
     app.include_router(capabilities.router, prefix=API_PREFIX, tags=["capabilities"])
     app.include_router(examples.router, prefix=API_PREFIX, tags=["examples"])
+    app.include_router(info.router, prefix=API_PREFIX, tags=["info"])
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
@@ -258,10 +259,9 @@ def _mount_frontend(app: FastAPI, settings: Settings) -> None:
     if os.path.isdir(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    @app.get("/", include_in_schema=False)
-    def spa_root() -> FileResponse:
-        return FileResponse(index_file, media_type="text/html")
-
+    # Single catch-all also handles "/" (full_path == ""). StaticFiles(html=True)
+    # can't replace this: it 404s on unknown deep-link routes instead of serving
+    # the SPA shell, which client-side routing needs.
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str) -> Response:
         # Serve a real bundled file if it exists (favicon, manifest, etc.);

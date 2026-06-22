@@ -6,7 +6,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from jinja2 import StrictUndefined, Undefined
+from jinja2 import StrictUndefined
 from jinja2.exceptions import (
     TemplateRuntimeError,
     TemplateSyntaxError,
@@ -26,7 +26,6 @@ RENDER_MODES = ["base", "ansible", "salt"]
 class RenderOptions:
     trim: bool = True
     lstrip: bool = False
-    strict: bool = True
 
 
 @dataclass
@@ -44,11 +43,12 @@ def build_environment(options: RenderOptions, render_mode: str) -> SandboxedEnvi
     if render_mode not in RENDER_MODES:
         raise RenderError("validation_error", f"Unknown render mode: {render_mode!r}.")
 
-    undefined: type[Undefined] = StrictUndefined if options.strict else Undefined
+    # Undefined variables always fail (StrictUndefined): strict checking is the
+    # only supported behavior — there is no non-strict toggle.
     env = SandboxedEnvironment(
         trim_blocks=options.trim,
         lstrip_blocks=options.lstrip,
-        undefined=undefined,
+        undefined=StrictUndefined,
         autoescape=False,
         keep_trailing_newline=True,
     )

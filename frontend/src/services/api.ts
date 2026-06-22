@@ -1,5 +1,7 @@
 import type {
+  CapabilitiesResponse,
   ExamplesResponse,
+  InfoResponse,
   RenderFailure,
   RenderRequest,
   RenderSuccess,
@@ -21,4 +23,14 @@ export async function renderTemplate(
 export async function fetchExamples(): Promise<ExamplesResponse> {
   const resp = await fetch(`${BASE}/examples`);
   return (await resp.json()) as ExamplesResponse;
+}
+
+export async function fetchCapabilities(): Promise<CapabilitiesResponse> {
+  const resp = await fetch(`${BASE}/capabilities`);
+  return (await resp.json()) as CapabilitiesResponse;
+}
+
+export async function fetchInfo(): Promise<InfoResponse> {
+  const resp = await fetch(`${BASE}/info`);
+  return (await resp.json()) as InfoResponse;
 }

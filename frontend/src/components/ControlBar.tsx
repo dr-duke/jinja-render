@@ -6,9 +6,14 @@ import {
   downloadJsonFile,
   readFileAsText,
 } from "../app/workspaceFile";
-import { Toggle } from "./Toggle";
+import { ToggleButton } from "./ToggleButton";
+import { strings } from "../i18n/strings";
 
-const MODES: RenderMode[] = ["base", "ansible", "salt"];
+const t = strings.controlbar;
+const f = strings.features;
+
+// Static fallback used until /capabilities loads (or if the request fails).
+const FALLBACK_MODES: RenderMode[] = ["base", "ansible", "salt"];
 
 function SaveIcon() {
   // Schematic floppy-disk glyph. Decorative.
@@ -61,14 +66,24 @@ export function ControlBar() {
     status,
     autoRender,
     autocompleteEnabled,
+    capabilities,
+    examples,
     setRenderMode,
     setOption,
     setAutoRender,
     setAutocompleteEnabled,
+    loadExample,
     render,
     exportState,
     importState,
   } = useStore();
+
+  const modes = capabilities?.renderModes ?? FALLBACK_MODES;
+
+  const onPickExample = (id: string) => {
+    const ex = examples.find((e) => e.id === id);
+    if (ex) loadExample(ex.template, ex.data, ex.render_mode, ex.data_format);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [ioError, setIoError] = useState<string | null>(null);
@@ -79,7 +94,7 @@ export function ControlBar() {
       const json = JSON.stringify(exportState(), null, 2);
       downloadJsonFile(defaultWorkspaceFilename(), json);
     } catch {
-      setIoError("Could not save the workspace file.");
+      setIoError(t.saveError);
     }
   };
 
@@ -98,12 +113,12 @@ export function ControlBar() {
       const text = await readFileAsText(file);
       const parsed = JSON.parse(text);
       if (!importState(parsed)) {
-        setIoError("Unsupported or corrupt workspace file.");
+        setIoError(t.loadCorruptError);
         return;
       }
       setIoError(null);
     } catch {
-      setIoError("Could not read the workspace file (invalid JSON).");
+      setIoError(t.loadReadError);
     }
   };
 
@@ -111,51 +126,64 @@ export function ControlBar() {
     <div className="controlbar">
       <div className="control-group">
         <label className="mode-label">
-          Mode
+          {t.modeLabel}
           <select
-            aria-label="Render mode"
+            aria-label={t.renderModeAria}
             value={renderMode}
             onChange={(e) => setRenderMode(e.target.value as RenderMode)}
           >
-            {MODES.map((m) => (
+            {modes.map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>
             ))}
           </select>
         </label>
+        {examples.length > 0 && (
+          <label className="mode-label">
+            {t.exampleLabel}
+            <select
+              aria-label={t.loadExampleAria}
+              value=""
+              onChange={(e) => onPickExample(e.target.value)}
+            >
+              <option value="" disabled>
+                {t.examplePlaceholder}
+              </option>
+              {examples.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="control-group">
-        <Toggle
-          label="Hints"
-          checked={autocompleteEnabled}
+        <ToggleButton
+          label={f.hints.label}
+          pressed={autocompleteEnabled}
           onChange={setAutocompleteEnabled}
-          title="Enable Jinja autocomplete and inline help in the template editor."
+          title={f.hints.title}
         />
-        <Toggle
-          label="Trim"
-          checked={options.trim}
+        <ToggleButton
+          label={f.trim.label}
+          pressed={options.trim}
           onChange={(v) => setOption("trim", v)}
-          title="Remove the first newline after template blocks."
+          title={f.trim.title}
         />
-        <Toggle
-          label="Lstrip"
-          checked={options.lstrip}
+        <ToggleButton
+          label={f.lstrip.label}
+          pressed={options.lstrip}
           onChange={(v) => setOption("lstrip", v)}
-          title="Strip leading spaces and tabs before template blocks."
+          title={f.lstrip.title}
         />
-        <Toggle
-          label="Strict check"
-          checked={options.strict}
-          onChange={(v) => setOption("strict", v)}
-          title="Fail rendering when a variable is missing."
-        />
-        <Toggle
-          label="Auto-render"
-          checked={autoRender}
+        <ToggleButton
+          label={f.autoRender.label}
+          pressed={autoRender}
           onChange={setAutoRender}
-          title="Render automatically after edits or focus changes."
+          title={f.autoRender.title}
         />
       </div>
 
@@ -169,8 +197,8 @@ export function ControlBar() {
           type="button"
           className="btn btn-icon"
           onClick={onSave}
-          title="Save workspace to a file"
-          aria-label="Save workspace to a file"
+          title={t.saveAria}
+          aria-label={t.saveAria}
         >
           <SaveIcon />
         </button>
@@ -178,8 +206,8 @@ export function ControlBar() {
           type="button"
           className="btn btn-icon"
           onClick={onLoadClick}
-          title="Load workspace from a file"
-          aria-label="Load workspace from a file"
+          title={t.loadAria}
+          aria-label={t.loadAria}
         >
           <LoadIcon />
         </button>
@@ -197,7 +225,7 @@ export function ControlBar() {
           onClick={() => void render()}
           disabled={status === "loading"}
         >
-          {status === "loading" ? "Rendering…" : "Render template"}
+          {status === "loading" ? t.rendering : t.render}
         </button>
       </div>
     </div>

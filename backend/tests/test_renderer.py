@@ -25,15 +25,12 @@ def test_salt_mode_render():
     assert res.rendered == "5"
 
 
-def test_strict_undefined_raises():
+def test_undefined_always_raises():
+    # Strict undefined checking is always on (no toggle): a missing variable
+    # always raises, regardless of options.
     with pytest.raises(RenderError) as exc:
-        render_template("{{ missing }}", {}, RenderOptions(strict=True), "base", timeout=TIMEOUT)
+        render_template("{{ missing }}", {}, RenderOptions(), "base", timeout=TIMEOUT)
     assert exc.value.type == "undefined_error"
-
-
-def test_non_strict_undefined_renders_empty():
-    res = render_template("[{{ missing }}]", {}, RenderOptions(strict=False), "base", timeout=TIMEOUT)
-    assert res.rendered == "[]"
 
 
 def test_trim_blocks():
@@ -110,10 +107,13 @@ def test_ansible_mode_injects_emulated_hostfacts():
 
 
 def test_base_mode_has_no_hostfacts():
-    res = render_template(
-        "{{ ansible_hostname }}", {}, RenderOptions(strict=False), "base", timeout=TIMEOUT
-    )
-    assert res.rendered == ""
+    # Facts are injected only in ansible mode; in base mode the variable is
+    # undefined and strict rendering (always on) raises.
+    with pytest.raises(RenderError) as exc:
+        render_template(
+            "{{ ansible_hostname }}", {}, RenderOptions(), "base", timeout=TIMEOUT
+        )
+    assert exc.value.type == "undefined_error"
 
 
 def test_user_data_overrides_emulated_hostfacts():

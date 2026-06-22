@@ -24,3 +24,7 @@ def build_ansible_filters() -> dict[str, Any]:
 
 
 ANSIBLE_FILTER_NAMES: list[str] = sorted(build_ansible_filters().keys())
+
+# Name -> one-line description for the emulated ansible filters, aggregated from
+# each group. Surfaced via /capabilities for the frontend autocomplete.
+ANSIBLE_FILTER_DOCS: dict[str, str] = {**core.DOCS, **mathstuff.DOCS}

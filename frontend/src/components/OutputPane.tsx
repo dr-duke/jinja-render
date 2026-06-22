@@ -1,6 +1,10 @@
 import { useStore } from "../app/store";
 import { PanelActions } from "./PanelActions";
 import { CodeMirrorEditor } from "./editor/CodeMirrorEditor";
+import { strings } from "../i18n/strings";
+
+const p = strings.panels;
+const o = strings.output;
 
 export function OutputPane() {
   const { lastSuccess, lastError } = useStore();
@@ -11,7 +15,7 @@ export function OutputPane() {
   return (
     <div className="output">
       <div className="panel-header">
-        <span className="editor-label">Rendered output</span>
+        <span className="editor-label">{p.outputLabel}</span>
         <PanelActions panel="output" getRawText={() => raw} canCopy={!!lastSuccess} />
       </div>
 
@@ -21,8 +25,8 @@ export function OutputPane() {
           <div className="error-message">{lastError.error.message}</div>
           {lastError.error.line != null && (
             <div className="error-loc">
-              line {lastError.error.line}
-              {lastError.error.column != null ? `, column ${lastError.error.column}` : ""}
+              {o.line} {lastError.error.line}
+              {lastError.error.column != null ? `, ${o.column} ${lastError.error.column}` : ""}
             </div>
           )}
         </div>
@@ -34,14 +38,14 @@ export function OutputPane() {
           readOnly
           showLines={view.showLines}
           showWhitespaces={view.showWhitespaces}
-          ariaLabel="rendered output"
+          ariaLabel={p.outputAria}
           testId="output"
         />
       </div>
 
       {lastSuccess && (
         <div className="output-meta">
-          format: {lastSuccess.meta.data_format_detected} · mode:{" "}
+          {o.formatPrefix} {lastSuccess.meta.data_format_detected} · {o.modePrefix}{" "}
           {lastSuccess.meta.render_mode_applied} · {lastSuccess.meta.duration_ms} ms
           {lastSuccess.warnings.length > 0 && (
             <span className="warnings"> · {lastSuccess.warnings.join("; ")}</span>

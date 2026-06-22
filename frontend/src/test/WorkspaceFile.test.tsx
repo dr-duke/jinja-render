@@ -14,7 +14,7 @@ function baseState() {
     data: "name: world\n",
     dataFormat: "auto" as const,
     renderMode: "base" as const,
-    options: { trim: true, lstrip: false, strict: true },
+    options: { trim: true, lstrip: false },
     status: "idle" as const,
     lastSuccess: null,
     lastError: null,
@@ -89,7 +89,7 @@ describe("store export/import", () => {
       data: "name: world\n",
       dataFormat: "auto",
       renderMode: "base",
-      options: { trim: true, lstrip: false, strict: true },
+      options: { trim: true, lstrip: false },
       autoRender: false,
     });
     expect(JSON.stringify(snap)).not.toContain("SHOULD NOT BE EXPORTED");
@@ -104,7 +104,7 @@ describe("store export/import", () => {
       data: '{"x": 1}',
       dataFormat: "json",
       renderMode: "ansible",
-      options: { trim: false, lstrip: true, strict: false },
+      options: { trim: false, lstrip: true },
       autoRender: true,
       panelViews: {
         template: { showLines: true, showWhitespaces: false },
@@ -118,7 +118,7 @@ describe("store export/import", () => {
     expect(s.data).toBe('{"x": 1}');
     expect(s.dataFormat).toBe("json");
     expect(s.renderMode).toBe("ansible");
-    expect(s.options).toEqual({ trim: false, lstrip: true, strict: false });
+    expect(s.options).toEqual({ trim: false, lstrip: true });
     expect(s.autoRender).toBe(true);
     expect(s.panelViews.template.showLines).toBe(true);
     expect(s.panelViews.data.showWhitespaces).toBe(true);
@@ -177,7 +177,7 @@ describe("ControlBar save/load UI", () => {
       data: "y: 7\n",
       dataFormat: "yaml",
       renderMode: "salt",
-      options: { trim: false, lstrip: true, strict: false },
+      options: { trim: false, lstrip: true },
       autoRender: false,
       panelViews: {
         template: { showLines: false, showWhitespaces: false },

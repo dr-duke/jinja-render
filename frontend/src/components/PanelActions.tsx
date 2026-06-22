@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useStore } from "../app/store";
 import type { PanelId } from "../app/store";
+import { strings } from "../i18n/strings";
+
+const a = strings.actions;
 
 interface PanelActionsProps {
   panel: PanelId;
@@ -53,8 +56,8 @@ export function PanelActions({ panel, getRawText, canCopy }: PanelActionsProps) 
         className="btn btn-icon"
         onClick={() => void copy()}
         disabled={!canCopy}
-        title="Copy raw content"
-        aria-label={copied ? "Copied" : "Copy"}
+        title={a.copyTitle}
+        aria-label={copied ? a.copied : a.copy}
       >
         <CopyIcon />
       </button>
@@ -63,8 +66,8 @@ export function PanelActions({ panel, getRawText, canCopy }: PanelActionsProps) 
         className={`btn btn-icon${view.showLines ? " is-active" : ""}`}
         aria-pressed={view.showLines}
         onClick={() => setPanelView(panel, "showLines", !view.showLines)}
-        title="Toggle line numbers"
-        aria-label="Toggle line numbers"
+        title={a.lineNumbers}
+        aria-label={a.lineNumbers}
       >
         #
       </button>
@@ -73,8 +76,8 @@ export function PanelActions({ panel, getRawText, canCopy }: PanelActionsProps) 
         className={`btn btn-icon${view.showWhitespaces ? " is-active" : ""}`}
         aria-pressed={view.showWhitespaces}
         onClick={() => setPanelView(panel, "showWhitespaces", !view.showWhitespaces)}
-        title="Show whitespace characters"
-        aria-label="Show whitespaces"
+        title={a.showWhitespacesTitle}
+        aria-label={a.showWhitespaces}
       >
         ¶
       </button>
@@ -82,8 +85,8 @@ export function PanelActions({ panel, getRawText, canCopy }: PanelActionsProps) 
         type="button"
         className="btn btn-icon"
         onClick={() => clearPanel(panel)}
-        title="Clear this panel"
-        aria-label="Clear"
+        title={a.clearTitle}
+        aria-label={a.clear}
       >
         ✕
       </button>

@@ -34,6 +34,15 @@ def emulated_facts() -> dict[str, Any]:
     return {key: _copy(value) for key, value in _EMULATED_FACTS.items()}
 
 
+def fact_names() -> list[str]:
+    """Top-level emulated fact variable names, plus the ``ansible_facts`` mapping.
+
+    Surfaced via /capabilities so the frontend autocomplete can offer the same
+    fact variables the renderer injects in ansible mode.
+    """
+    return sorted([*_EMULATED_FACTS.keys(), "ansible_facts"])
+
+
 def _copy(value: Any) -> Any:
     if isinstance(value, dict):
         return {k: _copy(v) for k, v in value.items()}

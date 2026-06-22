@@ -13,7 +13,7 @@ function baseState() {
     data: "name: world\n",
     dataFormat: "auto" as const,
     renderMode: "base" as const,
-    options: { trim: true, lstrip: false, strict: true },
+    options: { trim: true, lstrip: false },
     status: "idle" as const,
     lastSuccess: null,
     lastError: null,
@@ -43,45 +43,41 @@ describe("autocomplete hints switch", () => {
     expect(useStore.getState().autocompleteEnabled).toBe(false);
   });
 
-  it("renders the Hints switch to the left of Trim/Lstrip/Strict/Auto-render", () => {
+  it("renders the Hints toggle to the left of Trim/Lstrip/Strict/Auto-render", () => {
     render(<App />);
-    const labels = Array.from(document.querySelectorAll(".switch .switch-label")).map(
+    const labels = Array.from(document.querySelectorAll(".btn-toggle")).map(
       (el) => el.textContent,
     );
-    expect(labels).toEqual(["Hints", "Trim", "Lstrip", "Strict check", "Auto-render"]);
+    expect(labels).toEqual(["Hints", "Trim", "Lstrip", "Auto-render"]);
   });
 
-  it("Hints switch is off by default and has the English tooltip", () => {
+  it("Hints toggle is unpressed by default and has the English tooltip", () => {
     render(<App />);
-    const hints = screen.getByText("Hints").closest(".switch") as HTMLElement;
+    const hints = screen.getByRole("button", { name: "Hints" });
     expect(hints).toHaveAttribute(
       "title",
       "Enable Jinja autocomplete and inline help in the template editor.",
     );
-    const input = hints.querySelector('input[role="switch"]') as HTMLInputElement;
-    expect(input.checked).toBe(false);
+    expect(hints).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("toggling the switch updates store state", async () => {
+  it("toggling the button updates store state and aria-pressed", async () => {
     render(<App />);
-    const hints = screen.getByText("Hints").closest(".switch") as HTMLElement;
-    const input = hints.querySelector('input[role="switch"]') as HTMLInputElement;
+    const hints = screen.getByRole("button", { name: "Hints" });
     expect(useStore.getState().autocompleteEnabled).toBe(false);
-    await userEvent.click(input);
+    await userEvent.click(hints);
     expect(useStore.getState().autocompleteEnabled).toBe(true);
-    expect(input.checked).toBe(true);
+    expect(hints).toHaveAttribute("aria-pressed", "true");
   });
 
   it("connects/disconnects the autocomplete extension on the template editor", async () => {
     render(<App />);
     // CodeMirror's autocompletion() sets aria-autocomplete="list" on the content
     // element only while a completion source is wired. With hints off (default)
-    // it must be absent; enabling the switch must add it.
+    // it must be absent; enabling the toggle must add it.
     const tmpl = screen.getByLabelText("template");
     expect(tmpl.getAttribute("aria-autocomplete")).toBeNull();
-    await userEvent.click(
-      screen.getByText("Hints").closest(".switch")!.querySelector("input")!,
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Hints" }));
     expect(useStore.getState().autocompleteEnabled).toBe(true);
     expect(
       screen.getByLabelText("template").getAttribute("aria-autocomplete"),
@@ -90,18 +86,14 @@ describe("autocomplete hints switch", () => {
 
   it("never wires autocomplete onto the data editor", async () => {
     render(<App />);
-    await userEvent.click(
-      screen.getByText("Hints").closest(".switch")!.querySelector("input")!,
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Hints" }));
     // Even with hints enabled, only the template panel gets autocomplete.
     expect(screen.getByLabelText("data").getAttribute("aria-autocomplete")).toBeNull();
   });
 
   it("persists the hints setting to localStorage", async () => {
     render(<App />);
-    await userEvent.click(
-      screen.getByText("Hints").closest(".switch")!.querySelector("input")!,
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Hints" }));
     await waitFor(() => {
       const raw = localStorage.getItem(STORAGE_KEY);
       expect(raw).toBeTruthy();
@@ -122,7 +114,7 @@ describe("autocomplete hints switch", () => {
       data: "d",
       dataFormat: "auto",
       renderMode: "base",
-      options: { trim: true, lstrip: false, strict: true },
+      options: { trim: true, lstrip: false },
       autoRender: false,
       autocompleteEnabled: true,
       panelViews: {
@@ -145,7 +137,7 @@ describe("autocomplete hints switch", () => {
       data: "d",
       dataFormat: "auto",
       renderMode: "base",
-      options: { trim: true, lstrip: false, strict: true },
+      options: { trim: true, lstrip: false },
       autoRender: false,
       panelViews: {
         template: { showLines: false, showWhitespaces: false },

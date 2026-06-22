@@ -4,7 +4,6 @@ export type RenderMode = "base" | "ansible" | "salt";
 export interface RenderOptions {
   trim: boolean;
   lstrip: boolean;
-  strict: boolean;
 }
 
 export interface RenderRequest {
@@ -56,4 +55,34 @@ export interface Example {
 export interface ExamplesResponse {
   examples: Example[];
   default: Example;
+}
+
+// Raw /capabilities payload (snake_case, as the backend serializes it).
+export interface CapabilitiesResponse {
+  render_modes: RenderMode[];
+  options: string[];
+  filters: string[];
+  filters_by_mode: Record<string, string[]>;
+  filter_descriptions: Record<string, string>;
+  ansible_facts: string[];
+  data_formats: DataFormat[];
+}
+
+// Project metadata from GET /api/v1/info (shown in the info popover).
+export interface InfoResponse {
+  name: string;
+  description: string;
+  version: string;
+  repository: string;
+  license: string;
+}
+
+// Normalized capabilities kept in the store and consumed by the UI/autocomplete.
+export interface Capabilities {
+  renderModes: RenderMode[];
+  options: string[];
+  filtersByMode: Record<string, string[]>;
+  filterDescriptions: Record<string, string>;
+  ansibleFacts: string[];
+  dataFormats: DataFormat[];
 }

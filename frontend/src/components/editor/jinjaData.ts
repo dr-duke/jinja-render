@@ -95,8 +95,9 @@ export const SNIPPETS: Completion[] = [
   }),
 ];
 
-// Builtin Jinja filters (subset) plus project filters. Used after `|`.
-export const FILTERS: Completion[] = [
+// Builtin Jinja2 filters (subset). Used after `|`. These are always available in
+// every render mode (the backend does not register them — Jinja2 provides them).
+export const BUILTIN_FILTERS: Completion[] = [
   { label: "default", type: "function", detail: "filter", info: "Use a fallback when the value is undefined. Example: {{ x | default('n/a') }}" },
   { label: "join", type: "function", detail: "filter", info: "Join a sequence with a separator. Example: {{ list | join(', ') }}" },
   { label: "length", type: "function", detail: "filter", info: "Number of items / characters. Example: {{ items | length }}" },
@@ -129,11 +130,14 @@ export const FILTERS: Completion[] = [
   { label: "round", type: "function", detail: "filter", info: "Round a number. Example: {{ x | round(2) }}" },
   { label: "abs", type: "function", detail: "filter", info: "Absolute value." },
   { label: "tojson", type: "function", detail: "filter", info: "Serialize a value to JSON." },
-  { label: "to_json", type: "function", detail: "filter", info: "Serialize a value to JSON (alias)." },
-  { label: "to_yaml", type: "function", detail: "filter", info: "Serialize a value to YAML (profile filter)." },
-  // Project filters.
-  { label: "hash", type: "function", detail: "filter · project", info: "Hash a value. Example: {{ hostname | hash('sha256') }}. Algorithm defaults to sha256." },
-  { label: "ipaddr", type: "function", detail: "filter · project", info: "ansible-like IP filter. Example: {{ '192.0.2.1/24' | ipaddr('network') }}. Queries: address, network, netmask, prefix, broadcast, size, …" },
+];
+
+// Fallback for the project/emulated filters when /capabilities has not loaded.
+// At runtime these come from the backend (with per-mode availability and
+// descriptions); this static list keeps the editor useful offline and in tests.
+export const PROJECT_FILTERS_FALLBACK: Completion[] = [
+  { label: "hash", type: "function", detail: "filter · project", info: "Hash a value with a hashlib algorithm (default sha256). Example: {{ hostname | hash('sha256') }}" },
+  { label: "ipaddr", type: "function", detail: "filter · project", info: "ansible-like IP/network filter. Example: {{ '192.0.2.1/24' | ipaddr('network') }}. Queries: address, network, netmask, prefix, …" },
 ];
 
 // Builtin Jinja tests (subset). Used after `is`.
@@ -157,9 +161,9 @@ export const TESTS: Completion[] = [
   { label: "lt", type: "function", detail: "test", info: "Less-than test." },
 ];
 
-// Emulated ansible facts surfaced only in ansible render mode. These mirror the
-// static facts the backend injects.
-export const ANSIBLE_FACTS: Completion[] = [
+// Fallback list of emulated ansible facts (ansible render mode), used when
+// /capabilities has not loaded. At runtime the fact names come from the backend.
+export const ANSIBLE_FACTS_FALLBACK: Completion[] = [
   { label: "ansible_facts", type: "variable", detail: "ansible", info: "Emulated, static host facts (ansible mode). User data overrides these." },
   { label: "ansible_hostname", type: "variable", detail: "ansible fact", info: "Emulated short hostname (ansible mode)." },
   { label: "ansible_fqdn", type: "variable", detail: "ansible fact", info: "Emulated fully-qualified domain name (ansible mode)." },

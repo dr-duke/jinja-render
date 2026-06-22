@@ -7,7 +7,7 @@ def _render(client, **kwargs):
         "data": "name: world",
         "data_format": "auto",
         "render_mode": "base",
-        "options": {"trim": True, "lstrip": False, "strict": True},
+        "options": {"trim": True, "lstrip": False},
     }
     body.update(kwargs)
     return client.post("/api/v1/render", json=body)
@@ -40,7 +40,7 @@ def test_render_ignores_legacy_show_whitespaces_option(client):
         client,
         template="a b",
         data="{}",
-        options={"trim": True, "lstrip": False, "strict": True, "show_whitespaces": True},
+        options={"trim": True, "lstrip": False, "show_whitespaces": True},
     )
     assert resp.status_code == 200
     assert resp.json()["rendered"] == "a b"
@@ -49,7 +49,7 @@ def test_render_ignores_legacy_show_whitespaces_option(client):
 def test_capabilities_omits_show_whitespaces(client):
     resp = client.get("/api/v1/capabilities")
     assert resp.status_code == 200
-    assert resp.json()["options"] == ["trim", "lstrip", "strict"]
+    assert resp.json()["options"] == ["trim", "lstrip"]
 
 
 def test_render_undefined_error(client):
@@ -83,6 +83,15 @@ def test_capabilities(client):
     assert data["filters_by_mode"]["base"] == ["hash", "ipaddr"]
     assert "combine" in data["filters_by_mode"]["ansible"]
     assert "combine" not in data["filters_by_mode"]["salt"]
+    # Every project/emulated filter carries a one-line description (used by the
+    # frontend autocomplete); built-in Jinja filters are intentionally excluded.
+    descriptions = data["filter_descriptions"]
+    assert descriptions["hash"] and descriptions["ipaddr"]
+    assert descriptions["combine"] and descriptions["regex_replace"]
+    assert set(descriptions) == set(data["filters_by_mode"]["ansible"])
+    # Emulated ansible fact variable names are exposed for autocomplete.
+    assert "ansible_hostname" in data["ansible_facts"]
+    assert "ansible_facts" in data["ansible_facts"]
 
 
 def test_examples(client):
@@ -91,6 +100,17 @@ def test_examples(client):
     data = resp.json()
     assert len(data["examples"]) >= 1
     assert data["default"]["id"] == data["examples"][0]["id"]
+
+
+def test_info(client):
+    resp = client.get("/api/v1/info")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "jinja-render"
+    assert data["version"]  # non-empty (single source of truth for version)
+    assert data["repository"].startswith("https://github.com/")
+    assert data["license"] == "MIT"
+    assert data["description"]
 
 
 def test_healthz(client):
@@ -147,7 +167,7 @@ def test_rate_limit_returns_429(rate_limited_client):
         "data": "{}",
         "data_format": "auto",
         "render_mode": "base",
-        "options": {"trim": True, "lstrip": False, "strict": True},
+        "options": {"trim": True, "lstrip": False},
     }
     statuses = [
         rate_limited_client.post("/api/v1/render", json=body).status_code

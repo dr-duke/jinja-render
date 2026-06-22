@@ -99,3 +99,15 @@ FILTERS: dict[str, Any] = {
     "zip_longest": do_zip_longest,
     "product": do_product,
 }
+
+# One-line descriptions surfaced via /capabilities (frontend autocomplete).
+DOCS: dict[str, str] = {
+    "union": "Set union of two lists, preserving order.",
+    "intersect": "Set intersection of two lists, preserving order.",
+    "difference": "Items in the first list but not the second, preserving order.",
+    "symmetric_difference": "Items in exactly one of the two lists, preserving order.",
+    "flatten": "Flatten nested lists (optional depth, skips nulls).",
+    "zip": "Zip several sequences into tuples (stops at the shortest).",
+    "zip_longest": "Zip sequences, padding short ones with fillvalue.",
+    "product": "Cartesian product of the input sequences.",
+}

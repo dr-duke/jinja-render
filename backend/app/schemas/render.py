@@ -11,7 +11,6 @@ RenderMode = Literal["base", "ansible", "salt"]
 class RenderOptionsIn(BaseModel):
     trim: bool = True
     lstrip: bool = False
-    strict: bool = True
 
 
 class RenderRequest(BaseModel):
@@ -44,6 +43,10 @@ class CapabilitiesResponse(BaseModel):
     filters: list[str]
     # Filters available per render mode (ansible exposes the emulated set).
     filters_by_mode: dict[str, list[str]] = {}
+    # Name -> one-line description for project/emulated filters (autocomplete).
+    filter_descriptions: dict[str, str] = {}
+    # Emulated ansible fact variable names injected in ansible mode.
+    ansible_facts: list[str] = []
     data_formats: list[str]
 
 
@@ -59,3 +62,11 @@ class Example(BaseModel):
 class ExamplesResponse(BaseModel):
     examples: list[Example]
     default: Example
+
+
+class InfoResponse(BaseModel):
+    name: str
+    description: str
+    version: str
+    repository: str
+    license: str

@@ -7,10 +7,21 @@ from typing import Any
 import netaddr
 
 from ..core.errors import RenderError
-from .ansible_filters import ANSIBLE_FILTER_NAMES, build_ansible_filters
+from .ansible_filters import (
+    ANSIBLE_FILTER_DOCS,
+    ANSIBLE_FILTER_NAMES,
+    build_ansible_filters,
+)
 
 # Filters exposed to templates in every render mode.
 COMMON_FILTER_NAMES = ["hash", "ipaddr"]
+
+# One-line descriptions for the common (project) filters, surfaced via
+# /capabilities for the frontend autocomplete.
+COMMON_FILTER_DOCS: dict[str, str] = {
+    "hash": "Hash a value with a hashlib algorithm (default sha256).",
+    "ipaddr": "ansible-like IP/network filter (queries: address, network, netmask, prefix, …).",
+}
 
 
 def _to_text(value: Any) -> str:
@@ -144,3 +155,13 @@ def filter_names_for_mode(render_mode: str) -> list[str]:
     if render_mode == "ansible":
         names += ANSIBLE_FILTER_NAMES
     return names
+
+
+def filter_descriptions() -> dict[str, str]:
+    """Name -> one-line description for every project/emulated filter.
+
+    Covers the common filters (all modes) plus the emulated ansible set. Built-in
+    Jinja2 filters are intentionally excluded — they are not registered by this
+    app and the frontend documents them on its own.
+    """
+    return {**COMMON_FILTER_DOCS, **ANSIBLE_FILTER_DOCS}

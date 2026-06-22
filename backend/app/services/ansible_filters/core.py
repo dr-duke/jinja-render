@@ -350,3 +350,30 @@ FILTERS: dict[str, Any] = {
     "regex_escape": regex_escape,
     "comment": comment,
 }
+
+# Short, human-readable descriptions surfaced via /capabilities (used by the
+# frontend autocomplete). Keep one line each; mirror the filter's behavior.
+DOCS: dict[str, str] = {
+    "to_json": "Serialize a value to a JSON string.",
+    "to_nice_json": "Serialize to pretty-printed, sorted JSON.",
+    "from_json": "Parse a JSON string into data.",
+    "to_yaml": "Serialize a value to a YAML string.",
+    "to_nice_yaml": "Serialize to pretty-printed block-style YAML.",
+    "from_yaml": "Parse a single YAML document into data.",
+    "from_yaml_all": "Parse a multi-document YAML stream into a list.",
+    "b64encode": "Base64-encode a string.",
+    "b64decode": "Decode a Base64 string.",
+    "bool": "Coerce a value to a boolean (yes/no/1/0/true/false).",
+    "ternary": "Return one value when truthy, another when falsy (optional None branch).",
+    "mandatory": "Fail rendering if the variable is undefined.",
+    "type_debug": "Return the value's Python type name.",
+    "quote": "Shell-quote a string for safe command-line use.",
+    "combine": "Merge dictionaries (recursive + list_merge options).",
+    "dict2items": "Convert a dict to a list of {key, value} items.",
+    "items2dict": "Convert a list of {key, value} items back to a dict.",
+    "regex_replace": "Replace text matching a regex pattern.",
+    "regex_search": "Return the first regex match (or capture groups).",
+    "regex_findall": "Return all non-overlapping regex matches as a list.",
+    "regex_escape": "Escape regex special characters in a string.",
+    "comment": "Wrap text as a comment block (plain/c/cblock/xml/erlang).",
+}

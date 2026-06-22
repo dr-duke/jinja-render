@@ -39,6 +39,7 @@ export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: Edi
       getData: () => useStore.getState().data,
       getDataFormat: () => useStore.getState().dataFormat,
       getRenderMode: () => useStore.getState().renderMode,
+      getCapabilities: () => useStore.getState().capabilities,
     });
   }, [panel, autocompleteEnabled]);
 

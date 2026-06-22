@@ -4,9 +4,12 @@ import { AUTO_RENDER_INTERVAL_MS } from "../../app/config";
 import { ControlBar } from "../../components/ControlBar";
 import { Editor } from "../../components/Editor";
 import { OutputPane } from "../../components/OutputPane";
+import { strings } from "../../i18n/strings";
 
 const MIN_COL_PCT = 20;
 const MIN_ROW_PCT = 15;
+const h = strings.header;
+const p = strings.panels;
 
 export function Workbench() {
   const { template, data, setTemplate, setData, render, autoRender } = useStore();
@@ -86,8 +89,8 @@ export function Workbench() {
   return (
     <div className="workbench">
       <header className="app-header">
-        <h1>jinja-render</h1>
-        <span className="subtitle">sandboxed Jinja2 playground</span>
+        <h1>{h.title}</h1>
+        <span className="subtitle">{h.subtitle}</span>
       </header>
       <ControlBar />
       <main className="panes" ref={mainRef}>
@@ -98,29 +101,29 @@ export function Workbench() {
         >
           <div className="pane pane-template" style={{ height: `${templateRowPct}%` }}>
             <Editor
-              label="Template (Jinja2)"
+              label={p.templateLabel}
               panel="template"
               value={template}
               onChange={setTemplate}
               onBlur={onEditorBlur}
-              ariaLabel="template"
+              ariaLabel={p.templateAria}
             />
           </div>
           <div
             className="splitter splitter-horizontal"
             role="separator"
             aria-orientation="horizontal"
-            aria-label="Resize template and data panels"
+            aria-label={p.resizeRowsAria}
             onMouseDown={startRowDrag}
           />
           <div className="pane pane-data" style={{ height: `${100 - templateRowPct}%` }}>
             <Editor
-              label="Data (YAML / JSON)"
+              label={p.dataLabel}
               panel="data"
               value={data}
               onChange={setData}
               onBlur={onEditorBlur}
-              ariaLabel="data"
+              ariaLabel={p.dataAria}
             />
           </div>
         </div>
@@ -128,7 +131,7 @@ export function Workbench() {
           className="splitter splitter-vertical"
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize editors and output"
+          aria-label={p.resizeColsAria}
           onMouseDown={startColDrag}
         />
         <div className="column column-right" style={{ width: `${100 - leftColPct}%` }}>

@@ -1,26 +1,29 @@
 import { create } from "zustand";
-import { renderTemplate } from "../services/api";
+import { fetchCapabilities, fetchExamples, renderTemplate } from "../services/api";
 import { AUTO_RENDER_DEFAULT } from "./config";
 import type {
+  Capabilities,
+  CapabilitiesResponse,
   DataFormat,
+  Example,
   RenderFailure,
   RenderMode,
   RenderOptions,
   RenderSuccess,
 } from "../types/api";
 
-const DEFAULT_TEMPLATE = `Hosts:
-{% for host in hosts %}
-  - {{ host.name }} ({{ host.ip }})
-{% endfor %}
-`;
-
-const DEFAULT_DATA = `hosts:
-  - name: web-01
-    ip: 192.0.2.10
-  - name: web-02
-    ip: 192.0.2.11
-`;
+// Normalize the raw snake_case /capabilities payload into the camelCase shape the
+// UI and autocomplete consume.
+function normalizeCapabilities(raw: CapabilitiesResponse): Capabilities {
+  return {
+    renderModes: raw.render_modes,
+    options: raw.options,
+    filtersByMode: raw.filters_by_mode,
+    filterDescriptions: raw.filter_descriptions,
+    ansibleFacts: raw.ansible_facts,
+    dataFormats: raw.data_formats,
+  };
+}
 
 export type Status = "idle" | "loading" | "success" | "error";
 
@@ -74,6 +77,11 @@ interface WorkbenchState {
   autocompleteEnabled: boolean;
   panelViews: PanelViews;
 
+  // Server-provided capabilities/examples (null/[] until loaded; UI falls back to
+  // static defaults so it works even if the requests fail). Never persisted.
+  capabilities: Capabilities | null;
+  examples: Example[];
+
   setTemplate: (v: string) => void;
   setData: (v: string) => void;
   setDataFormat: (v: DataFormat) => void;
@@ -87,6 +95,8 @@ interface WorkbenchState {
   render: () => Promise<void>;
   exportState: () => PersistedState;
   importState: (parsed: unknown) => boolean;
+  // Fetch capabilities + examples once at startup (best-effort, never throws).
+  loadServerData: () => Promise<void>;
 }
 
 function hasStorage(): boolean {
@@ -137,7 +147,6 @@ export function validatePersisted(parsed: unknown): Partial<WorkbenchState> | nu
     restored.options = {
       trim: !!p.options.trim,
       lstrip: !!p.options.lstrip,
-      strict: !!p.options.strict,
     };
   }
   if (typeof p.autoRender === "boolean") restored.autoRender = p.autoRender;
@@ -204,19 +213,25 @@ function writePersisted(s: WorkbenchState): void {
 }
 
 const persistedDefaults = loadPersisted();
+// Whether we restored a saved workspace. When false, loadServerData seeds the
+// editors from the first server example (instead of a hardcoded default).
+const hadPersisted = persistedDefaults !== null;
 
 export const useStore = create<WorkbenchState>((set, get) => ({
-  template: DEFAULT_TEMPLATE,
-  data: DEFAULT_DATA,
+  // Start empty; with no persisted state, loadServerData seeds the first example.
+  template: "",
+  data: "",
   dataFormat: "auto",
   renderMode: "base",
-  options: { trim: true, lstrip: false, strict: true },
+  options: { trim: true, lstrip: false },
   status: "idle",
   lastSuccess: null,
   lastError: null,
   autoRender: AUTO_RENDER_DEFAULT,
   autocompleteEnabled: false,
   panelViews: DEFAULT_PANEL_VIEWS,
+  capabilities: null,
+  examples: [],
   ...persistedDefaults,
 
   setTemplate: (v) => set({ template: v }),
@@ -252,6 +267,34 @@ export const useStore = create<WorkbenchState>((set, get) => ({
     set(restored);
     writePersisted(get());
     return true;
+  },
+
+  // Best-effort load of server capabilities + examples. Each request is
+  // independent (allSettled) and failures are swallowed so the UI keeps working
+  // on its static fallbacks. When the workspace is empty and nothing was
+  // restored from localStorage, seed the editors from the first example.
+  loadServerData: async () => {
+    const [capsRes, exRes] = await Promise.allSettled([
+      fetchCapabilities(),
+      fetchExamples(),
+    ]);
+    if (capsRes.status === "fulfilled") {
+      set({ capabilities: normalizeCapabilities(capsRes.value) });
+    }
+    if (exRes.status === "fulfilled") {
+      const examples = exRes.value.examples ?? [];
+      set({ examples });
+      const s = get();
+      if (!hadPersisted && s.template === "" && s.data === "" && examples.length > 0) {
+        const d = exRes.value.default ?? examples[0];
+        set({
+          template: d.template,
+          data: d.data,
+          renderMode: d.render_mode,
+          dataFormat: d.data_format,
+        });
+      }
+    }
   },
 
   render: async () => {

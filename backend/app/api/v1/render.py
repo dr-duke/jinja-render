@@ -35,7 +35,6 @@ def render(req: RenderRequest, request: Request) -> RenderResponse:
     options = RenderOptions(
         trim=req.options.trim,
         lstrip=req.options.lstrip,
-        strict=req.options.strict,
     )
     result = render_template(
         req.template,

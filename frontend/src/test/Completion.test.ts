@@ -3,7 +3,7 @@ import { EditorState } from "@codemirror/state";
 import type { CompletionContext, CompletionResult } from "@codemirror/autocomplete";
 import { makeJinjaCompletionSource, type CompletionEnv } from "../components/editor/complete";
 import { extractVariablePaths } from "../components/editor/vars";
-import type { DataFormat, RenderMode } from "../types/api";
+import type { Capabilities, DataFormat, RenderMode } from "../types/api";
 
 // Build a CompletionContext positioned at the end of `doc`.
 function ctxAtEnd(doc: string, explicit = true): CompletionContext {
@@ -27,11 +27,36 @@ function ctxAtEnd(doc: string, explicit = true): CompletionContext {
   } as unknown as CompletionContext;
 }
 
-const env = (data: string, format: DataFormat, mode: RenderMode = "base"): CompletionEnv => ({
+const env = (
+  data: string,
+  format: DataFormat,
+  mode: RenderMode = "base",
+  capabilities: Capabilities | null = null,
+): CompletionEnv => ({
   getData: () => data,
   getDataFormat: () => format,
   getRenderMode: () => mode,
+  getCapabilities: () => capabilities,
 });
+
+const CAPS: Capabilities = {
+  renderModes: ["base", "ansible", "salt"],
+  options: ["trim", "lstrip"],
+  filtersByMode: {
+    base: ["hash", "ipaddr"],
+    ansible: ["hash", "ipaddr", "combine", "regex_replace", "union"],
+    salt: ["hash", "ipaddr"],
+  },
+  filterDescriptions: {
+    hash: "Hash a value with a hashlib algorithm (default sha256).",
+    ipaddr: "ansible-like IP/network filter.",
+    combine: "Merge dictionaries (recursive + list_merge options).",
+    regex_replace: "Replace text matching a regex pattern.",
+    union: "Set union of two lists, preserving order.",
+  },
+  ansibleFacts: ["ansible_hostname", "ansible_fqdn", "ansible_facts"],
+  dataFormats: ["auto", "yaml", "json"],
+};
 
 function labels(res: CompletionResult | null): string[] {
   return res ? res.options.map((o) => o.label) : [];
@@ -136,5 +161,35 @@ describe("jinja completion source", () => {
     expect(typeof hash?.info).toBe("string");
     expect(hash?.info as string).toMatch(/hash/i);
     expect(hash?.detail).toMatch(/filter/);
+  });
+});
+
+describe("capabilities-driven filters and facts", () => {
+  it("offers emulated ansible filters with descriptions in ansible mode", () => {
+    const src = makeJinjaCompletionSource(env("", "auto", "ansible", CAPS));
+    const res = src(ctxAtEnd("{{ x | "));
+    const combine = res?.options.find((o) => o.label === "combine");
+    expect(combine).toBeDefined();
+    // Description comes straight from the backend's /capabilities payload.
+    expect(combine?.info).toBe("Merge dictionaries (recursive + list_merge options).");
+    const ls = labels(res);
+    expect(ls).toContain("regex_replace");
+    expect(ls).toContain("union");
+    // Builtin Jinja filters remain available too.
+    expect(ls).toContain("default");
+  });
+
+  it("does not offer ansible-only filters in base mode", () => {
+    const src = makeJinjaCompletionSource(env("", "auto", "base", CAPS));
+    const ls = labels(src(ctxAtEnd("{{ x | ")));
+    expect(ls).toContain("hash");
+    expect(ls).not.toContain("combine");
+    expect(ls).not.toContain("regex_replace");
+  });
+
+  it("sources ansible fact names from capabilities when present", () => {
+    const src = makeJinjaCompletionSource(env("", "auto", "ansible", CAPS));
+    const ls = labels(src(ctxAtEnd("{{ ")));
+    expect(ls).toContain("ansible_fqdn");
   });
 });
