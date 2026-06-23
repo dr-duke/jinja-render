@@ -1,5 +1,30 @@
 import "@testing-library/jest-dom";
 
+// jsdom has no layout engine, but CodeMirror's measuring path calls
+// getClientRects()/getBoundingClientRect() on Ranges and elements. On some
+// runners (e.g. Node 24 CI) the Range methods are missing entirely and editor
+// measuring throws ("textRange(...).getClientRects is not a function"). Provide
+// minimal stubs so measuring is a no-op instead of crashing tests that focus or
+// edit the editor.
+function stubRect(): DOMRect {
+  return {
+    x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0,
+    toJSON() {},
+  } as DOMRect;
+}
+function stubRectList(): DOMRectList {
+  const list: DOMRect[] = [];
+  return Object.assign(list, { item: (i: number) => list[i] ?? null }) as unknown as DOMRectList;
+}
+if (typeof Range !== "undefined") {
+  Range.prototype.getClientRects = function () {
+    return stubRectList();
+  };
+  Range.prototype.getBoundingClientRect = function () {
+    return stubRect();
+  };
+}
+
 // Default fetch stub: components load /capabilities and /examples on mount, and
 // we don't want those hitting the network in tests. Individual tests still mock
 // api.renderTemplate directly for the render flow. Kept as a plain assignment
