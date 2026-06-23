@@ -45,6 +45,9 @@ beforeEach(() => {
     lastError: null,
     autoRender: false,
     autocompleteEnabled: false,
+    // Options off so no #jinja2 directive line is prepended to the template
+    // editor; these tests exercise indentation of the editable text itself.
+    options: { trim: false, lstrip: false },
   });
   vi.restoreAllMocks();
 });

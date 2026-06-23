@@ -47,7 +47,9 @@ beforeEach(() => {
     status: "idle",
     lastSuccess: null,
     lastError: null,
-    options: { trim: true, lstrip: false },
+    // Options off so no #jinja2 directive line is prepended to the template
+    // editor; directive behavior is covered in Directive.test.tsx.
+    options: { trim: false, lstrip: false },
     renderMode: "base",
     panelViews: {
       template: { showLines: false, showWhitespaces: false },

@@ -1,5 +1,10 @@
 import { useEffect, useRef } from "react";
-import { EditorState, type Extension, Compartment } from "@codemirror/state";
+import {
+  EditorState,
+  type Extension,
+  Compartment,
+  Transaction,
+} from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { editorTheme } from "./theme";
@@ -17,10 +22,24 @@ interface CodeMirrorEditorProps {
   showLines?: boolean;
   showWhitespaces?: boolean;
   readOnly?: boolean;
+  /**
+   * A protected, non-editable first line prepended to the document (e.g. the
+   * `#jinja2:` directive). It is part of the document — so it is selectable and
+   * included when copying — but the user cannot edit or delete it. It is NOT part
+   * of `value`: onChange always reports the text after the prefix, so callers
+   * keep a clean value. Empty string means no prefix.
+   */
+  readOnlyPrefix?: string;
   /** Accessible name; also used by tests via getByLabelText. */
   ariaLabel?: string;
   /** Forwarded to the editable content node for test queries. */
   testId?: string;
+}
+
+// Compose the editor document from an optional protected prefix line and the
+// editable value.
+function composeDoc(prefix: string, value: string): string {
+  return prefix ? `${prefix}\n${value}` : value;
 }
 
 // Reusable CodeMirror 6 editor. Compartments let us reconfigure language and the
@@ -35,11 +54,17 @@ export function CodeMirrorEditor({
   showLines = false,
   showWhitespaces = false,
   readOnly = false,
+  readOnlyPrefix = "",
   ariaLabel,
   testId,
 }: CodeMirrorEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+
+  // Length of the protected region (prefix + its trailing newline). Read by the
+  // transaction filter and the change listener; kept in a ref so they always see
+  // the current value without recreating the view.
+  const protectedLenRef = useRef(readOnlyPrefix ? readOnlyPrefix.length + 1 : 0);
 
   const langComp = useRef(new Compartment());
   const linesComp = useRef(new Compartment());
@@ -64,14 +89,34 @@ export function CodeMirrorEditor({
     if (testId) contentAttrs["data-testid"] = testId;
 
     const updateListener = EditorView.updateListener.of((u) => {
-      if (u.docChanged) onChangeRef.current?.(u.state.doc.toString());
+      if (u.docChanged) {
+        const doc = u.state.doc.toString();
+        const plen = protectedLenRef.current;
+        // Report only the editable text after the protected prefix.
+        onChangeRef.current?.(plen ? doc.slice(plen) : doc);
+      }
       if (u.focusChanged && !u.view.hasFocus) onBlurRef.current?.();
     });
 
+    // Block user edits that touch the protected prefix region. Programmatic
+    // syncs (our value/prefix updates) carry no userEvent annotation and pass
+    // through, so they can rebuild the prefix freely.
+    const protectPrefix = EditorState.transactionFilter.of((tr) => {
+      const plen = protectedLenRef.current;
+      if (plen === 0 || !tr.docChanged) return tr;
+      if (tr.annotation(Transaction.userEvent) === undefined) return tr;
+      let blocked = false;
+      tr.changes.iterChangedRanges((fromA) => {
+        if (fromA < plen) blocked = true;
+      });
+      return blocked ? [] : tr;
+    });
+
     const state = EditorState.create({
-      doc: value,
+      doc: composeDoc(readOnlyPrefix, value),
       extensions: [
         history(),
+        protectPrefix,
         // Editable input panels get two-space block indent on Tab / Shift+Tab.
         // This keymap has higher precedence than defaultKeymap so it captures Tab
         // before any default handler. The read-only output panel never gets it,
@@ -104,15 +149,20 @@ export function CodeMirrorEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync external value -> editor (e.g. Clear, loadExample, store resets).
+  // Sync external value/prefix -> editor (e.g. Clear, loadExample, store resets,
+  // or toggling trim/lstrip which changes the prefix). The dispatch carries no
+  // userEvent annotation, so the prefix-protection filter lets it rebuild the
+  // protected line.
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
+    protectedLenRef.current = readOnlyPrefix ? readOnlyPrefix.length + 1 : 0;
+    const wantDoc = composeDoc(readOnlyPrefix, value);
     const current = view.state.doc.toString();
-    if (current !== value) {
-      view.dispatch({ changes: { from: 0, to: current.length, insert: value } });
+    if (current !== wantDoc) {
+      view.dispatch({ changes: { from: 0, to: current.length, insert: wantDoc } });
     }
-  }, [value]);
+  }, [value, readOnlyPrefix]);
 
   useEffect(() => {
     viewRef.current?.dispatch({

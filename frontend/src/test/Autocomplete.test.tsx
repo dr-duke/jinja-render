@@ -13,7 +13,7 @@ function baseState() {
     data: "name: world\n",
     dataFormat: "auto" as const,
     renderMode: "base" as const,
-    options: { trim: true, lstrip: false },
+    options: { trim: false, lstrip: false },
     status: "idle" as const,
     lastSuccess: null,
     lastError: null,

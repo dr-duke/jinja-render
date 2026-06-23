@@ -7,6 +7,7 @@ import { PanelActions } from "./PanelActions";
 import { CodeMirrorEditor } from "./editor/CodeMirrorEditor";
 import { jinja } from "./editor/jinja";
 import { jinjaAutocomplete } from "./editor/complete";
+import { jinjaDirective } from "./editor/directive";
 
 interface EditorProps {
   label: string;
@@ -21,6 +22,16 @@ export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: Edi
   const view = useStore((s) => s.panelViews[panel]);
   const dataFormat = useStore((s) => s.dataFormat);
   const autocompleteEnabled = useStore((s) => s.autocompleteEnabled);
+  const options = useStore((s) => s.options);
+
+  // On the template panel, pin the active whitespace options as a read-only
+  // `#jinja2:` first line. It's frontend-only (not part of `value`, never sent to
+  // the backend) and exists so the debugged template can be copied with the
+  // directive. Empty when both options are off, or on the data panel.
+  const directive = panel === "template" ? jinjaDirective(options) : "";
+  // Copy yields the directive together with the editable text (what you'd paste
+  // into an Ansible template).
+  const copyText = () => (directive ? `${directive}\n${value}` : value);
 
   // Template panel highlights Jinja2; data panel highlights JSON when the format
   // is explicitly json, otherwise YAML (covers "yaml" and "auto").
@@ -47,7 +58,11 @@ export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: Edi
     <div className="editor">
       <div className="panel-header">
         <span className="editor-label">{label}</span>
-        <PanelActions panel={panel} getRawText={() => value} canCopy={value.length > 0} />
+        <PanelActions
+          panel={panel}
+          getRawText={copyText}
+          canCopy={value.length > 0 || directive.length > 0}
+        />
       </div>
       <div className="editor-body">
         <CodeMirrorEditor
@@ -58,6 +73,7 @@ export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: Edi
           extraExtensions={extraExtensions}
           showLines={view.showLines}
           showWhitespaces={view.showWhitespaces}
+          readOnlyPrefix={directive}
           ariaLabel={ariaLabel ?? label}
         />
       </div>
