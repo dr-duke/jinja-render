@@ -30,11 +30,18 @@ export interface CompletionEnv {
 
 // Project/emulated filters available after `|`: Jinja2 builtins (always) plus the
 // backend filter set for the current mode (or a static fallback before
-// /capabilities loads). The ansible mode thus surfaces the full emulated Templar
-// set (combine, regex_*, set ops, …) with one-line descriptions from the server.
+// /capabilities loads). Project filters (incl. hash/ipaddr) are ansible-only, so
+// base/salt offer only Jinja2 builtins. The ansible mode surfaces the full
+// emulated Templar set (hash, ipaddr, combine, regex_*, set ops, …) with
+// one-line descriptions from the server.
 function filterCompletions(env: CompletionEnv): Completion[] {
   const caps = env.getCapabilities?.() ?? null;
-  if (!caps) return [...BUILTIN_FILTERS, ...PROJECT_FILTERS_FALLBACK];
+  if (!caps) {
+    // No capabilities yet: project filters exist only in ansible mode.
+    const fallback =
+      env.getRenderMode() === "ansible" ? PROJECT_FILTERS_FALLBACK : [];
+    return [...BUILTIN_FILTERS, ...fallback];
+  }
   const names = caps.filtersByMode[env.getRenderMode()] ?? [];
   const project: Completion[] = names.map((name) => ({
     label: name,

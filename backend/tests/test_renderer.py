@@ -162,9 +162,32 @@ def test_ansible_filter_absent_in_salt_mode():
         )
 
 
-def test_common_filters_still_work_in_all_modes():
-    for mode in ("base", "ansible", "salt"):
-        res = render_template(
-            "{{ 'x' | hash('sha256') }}", {}, RenderOptions(), mode, timeout=TIMEOUT
-        )
-        assert len(res.rendered) == 64
+def test_hash_and_ipaddr_only_in_ansible_mode():
+    # hash and ipaddr are emulated ansible filters (not Jinja2 built-ins): they
+    # work in ansible mode and are absent from base/salt.
+    res = render_template(
+        "{{ 'x' | hash('sha256') }}", {}, RenderOptions(), "ansible", timeout=TIMEOUT
+    )
+    assert len(res.rendered) == 64
+    res = render_template(
+        "{{ '192.0.2.1/24' | ipaddr('network') }}",
+        {},
+        RenderOptions(),
+        "ansible",
+        timeout=TIMEOUT,
+    )
+    assert res.rendered == "192.0.2.0"
+
+    for mode in ("base", "salt"):
+        with pytest.raises(RenderError):
+            render_template(
+                "{{ 'x' | hash('sha256') }}", {}, RenderOptions(), mode, timeout=TIMEOUT
+            )
+        with pytest.raises(RenderError):
+            render_template(
+                "{{ '192.0.2.1/24' | ipaddr('network') }}",
+                {},
+                RenderOptions(),
+                mode,
+                timeout=TIMEOUT,
+            )

@@ -26,8 +26,10 @@ EXAMPLES: list[dict[str, Any]] = [
     },
     {
         "id": "hash-filter",
+        # hash is an emulated ansible filter (not a Jinja2 built-in), so this
+        # example must run in ansible mode.
         "title": "hash filter",
-        "render_mode": "base",
+        "render_mode": "ansible",
         "data_format": "yaml",
         "template": "{{ hostname }} sha256: {{ hostname | hash('sha256') }}\n",
         "data": "hostname: router-01\n",

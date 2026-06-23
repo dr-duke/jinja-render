@@ -21,7 +21,8 @@ def test_render_success(client):
     assert data["rendered"] == "Hello world"
     assert data["meta"]["data_format_detected"] == "yaml"
     assert data["meta"]["render_mode_applied"] == "base"
-    assert "hash" in data["meta"]["filters_enabled"]
+    # base mode exposes no project filters (only Jinja2 built-ins).
+    assert data["meta"]["filters_enabled"] == []
 
 
 def test_render_response_has_no_backend_whitespace_field(client):
@@ -77,12 +78,15 @@ def test_capabilities(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["render_modes"] == ["base", "ansible", "salt"]
-    # Common filters are present in every mode.
-    assert {"hash", "ipaddr"} <= set(data["filters"])
-    # ansible mode additionally exposes the emulated Templar filter set.
-    assert data["filters_by_mode"]["base"] == ["hash", "ipaddr"]
-    assert "combine" in data["filters_by_mode"]["ansible"]
-    assert "combine" not in data["filters_by_mode"]["salt"]
+    # All project filters (incl. hash/ipaddr) are ansible-only now. base and salt
+    # expose no project filters — only Jinja2 built-ins.
+    assert data["filters_by_mode"]["base"] == []
+    assert data["filters_by_mode"]["salt"] == []
+    # hash and ipaddr (not Jinja2 built-ins) plus the emulated Templar set live
+    # only in ansible mode.
+    assert {"hash", "ipaddr", "combine"} <= set(data["filters_by_mode"]["ansible"])
+    # The flat union still contains every ansible filter.
+    assert {"hash", "ipaddr", "combine"} <= set(data["filters"])
     # Every project/emulated filter carries a one-line description (used by the
     # frontend autocomplete); built-in Jinja filters are intentionally excluded.
     descriptions = data["filter_descriptions"]

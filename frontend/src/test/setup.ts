@@ -36,9 +36,9 @@ const CAPABILITIES = {
   options: ["trim", "lstrip"],
   filters: ["hash", "ipaddr", "combine"],
   filters_by_mode: {
-    base: ["hash", "ipaddr"],
+    base: [],
     ansible: ["hash", "ipaddr", "combine"],
-    salt: ["hash", "ipaddr"],
+    salt: [],
   },
   filter_descriptions: {
     hash: "Hash a value with a hashlib algorithm (default sha256).",

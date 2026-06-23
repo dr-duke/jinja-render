@@ -43,9 +43,9 @@ const CAPS: Capabilities = {
   renderModes: ["base", "ansible", "salt"],
   options: ["trim", "lstrip"],
   filtersByMode: {
-    base: ["hash", "ipaddr"],
+    base: [],
     ansible: ["hash", "ipaddr", "combine", "regex_replace", "union"],
-    salt: ["hash", "ipaddr"],
+    salt: [],
   },
   filterDescriptions: {
     hash: "Hash a value with a hashlib algorithm (default sha256).",
@@ -89,12 +89,21 @@ describe("variable extraction", () => {
 });
 
 describe("jinja completion source", () => {
-  it("suggests filters after a pipe", () => {
+  it("suggests Jinja builtin filters after a pipe (base mode)", () => {
     const src = makeJinjaCompletionSource(env("", "auto"));
     const res = src(ctxAtEnd("{{ name | "));
     const ls = labels(res);
     expect(ls).toContain("default");
     expect(ls).toContain("join");
+    // hash/ipaddr are ansible-only project filters, not offered in base mode.
+    expect(ls).not.toContain("hash");
+    expect(ls).not.toContain("ipaddr");
+  });
+
+  it("offers hash/ipaddr after a pipe in ansible mode (fallback, no caps)", () => {
+    const src = makeJinjaCompletionSource(env("", "auto", "ansible"));
+    const ls = labels(src(ctxAtEnd("{{ name | ")));
+    expect(ls).toContain("default"); // builtins still there
     expect(ls).toContain("hash");
     expect(ls).toContain("ipaddr");
   });
@@ -155,7 +164,8 @@ describe("jinja completion source", () => {
   });
 
   it("provides English help text on key entries", () => {
-    const src = makeJinjaCompletionSource(env("", "auto"));
+    // hash is ansible-only, so check its help text in ansible mode.
+    const src = makeJinjaCompletionSource(env("", "auto", "ansible"));
     const res = src(ctxAtEnd("{{ name | "));
     const hash = res?.options.find((o) => o.label === "hash");
     expect(typeof hash?.info).toBe("string");
@@ -182,9 +192,13 @@ describe("capabilities-driven filters and facts", () => {
   it("does not offer ansible-only filters in base mode", () => {
     const src = makeJinjaCompletionSource(env("", "auto", "base", CAPS));
     const ls = labels(src(ctxAtEnd("{{ x | ")));
-    expect(ls).toContain("hash");
+    // hash/ipaddr are now ansible-only — base mode exposes no project filters.
+    expect(ls).not.toContain("hash");
+    expect(ls).not.toContain("ipaddr");
     expect(ls).not.toContain("combine");
     expect(ls).not.toContain("regex_replace");
+    // Jinja builtins are still offered.
+    expect(ls).toContain("default");
   });
 
   it("sources ansible fact names from capabilities when present", () => {

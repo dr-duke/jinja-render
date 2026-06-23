@@ -5,7 +5,7 @@ import hashlib
 import pytest
 
 from app.core.errors import RenderError
-from app.services.filters import do_hash, do_ipaddr
+from app.services.ansible_filters.extra import do_hash, do_ipaddr
 
 
 def test_hash_sha256():
