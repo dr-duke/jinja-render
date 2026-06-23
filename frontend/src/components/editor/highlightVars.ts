@@ -191,14 +191,18 @@ function variableHighlightPlugin(env: CompletionEnv) {
   );
 }
 
-// known: accent blue (matches the property color in the syntax theme).
-// unknown: warm amber with a subtle wavy underline — a hint, not an error.
+// known: accent blue. unknown: warm amber with a subtle wavy underline — a hint,
+// not an error. The Jinja StreamLanguage already tags these identifiers as
+// `variableName` and colors them via syntaxHighlighting (an inner span). Our
+// mark decoration wraps them in an outer span, so for the inherited `color` the
+// inner span would win — we therefore target the wrapper AND any nested span and
+// use !important so our semantic color overrides the syntax color.
 const variableTheme = EditorView.baseTheme({
-  ".cm-jinja-var-known": { color: "#82aaff" },
-  ".cm-jinja-var-unknown": {
-    color: "#ffb454",
+  ".cm-jinja-var-known, .cm-jinja-var-known span": { color: "#82aaff !important" },
+  ".cm-jinja-var-unknown, .cm-jinja-var-unknown span": {
+    color: "#ffb454 !important",
     textDecoration: "underline wavy",
-    textDecorationColor: "rgba(255, 180, 84, 0.5)",
+    textDecorationColor: "rgba(255, 180, 84, 0.6)",
   },
 });
 
