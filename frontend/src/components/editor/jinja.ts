@@ -6,7 +6,7 @@ import { StreamLanguage, type StreamParser } from "@codemirror/language";
 // strings, numbers, keywords, filters and operators. Text outside delimiters is
 // left untokenized (it is plain template text / target output language).
 
-const KEYWORDS = new Set([
+export const KEYWORDS = new Set([
   "if", "elif", "else", "endif",
   "for", "endfor", "in", "recursive",
   "block", "endblock",

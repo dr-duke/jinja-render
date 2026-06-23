@@ -19,6 +19,12 @@ interface CodeMirrorEditorProps {
   language?: Extension;
   /** Extra panel-specific extensions (e.g. autocomplete on the template panel). */
   extraExtensions?: Extension;
+  /**
+   * Semantic variable highlighting (template panel). Kept in its own compartment
+   * so it can be reconfigured when the Data panel changes without rebuilding the
+   * autocomplete extension.
+   */
+  variableHighlight?: Extension;
   showLines?: boolean;
   showWhitespaces?: boolean;
   readOnly?: boolean;
@@ -51,6 +57,7 @@ export function CodeMirrorEditor({
   onBlur,
   language,
   extraExtensions,
+  variableHighlight,
   showLines = false,
   showWhitespaces = false,
   readOnly = false,
@@ -71,6 +78,7 @@ export function CodeMirrorEditor({
   const wsComp = useRef(new Compartment());
   const readOnlyComp = useRef(new Compartment());
   const extraComp = useRef(new Compartment());
+  const varsComp = useRef(new Compartment());
 
   // Keep the latest callbacks in refs so the view's update listener (created
   // once) always calls the current handlers without recreating the editor.
@@ -128,6 +136,7 @@ export function CodeMirrorEditor({
         EditorView.contentAttributes.of(contentAttrs),
         langComp.current.of(language ?? []),
         extraComp.current.of(extraExtensions ?? []),
+        varsComp.current.of(variableHighlight ?? []),
         linesComp.current.of(showLines ? lineNumbers() : []),
         wsComp.current.of(showWhitespaces ? whitespaceExtension() : []),
         readOnlyComp.current.of([
@@ -175,6 +184,12 @@ export function CodeMirrorEditor({
       effects: extraComp.current.reconfigure(extraExtensions ?? []),
     });
   }, [extraExtensions]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: varsComp.current.reconfigure(variableHighlight ?? []),
+    });
+  }, [variableHighlight]);
 
   useEffect(() => {
     viewRef.current?.dispatch({

@@ -7,6 +7,7 @@ import { PanelActions } from "./PanelActions";
 import { CodeMirrorEditor } from "./editor/CodeMirrorEditor";
 import { jinja } from "./editor/jinja";
 import { jinjaAutocomplete } from "./editor/complete";
+import { jinjaVariableHighlight } from "./editor/highlightVars";
 import { jinjaDirective } from "./editor/directive";
 
 interface EditorProps {
@@ -23,6 +24,11 @@ export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: Edi
   const dataFormat = useStore((s) => s.dataFormat);
   const autocompleteEnabled = useStore((s) => s.autocompleteEnabled);
   const options = useStore((s) => s.options);
+  // Variable highlighting reacts to these: re-derive the extension when the Data
+  // panel, format, mode, or server capabilities change so known/unknown updates.
+  const data = useStore((s) => s.data);
+  const renderMode = useStore((s) => s.renderMode);
+  const capabilities = useStore((s) => s.capabilities);
 
   // On the template panel, pin the active whitespace options as a read-only
   // `#jinja2:` first line. It's frontend-only (not part of `value`, never sent to
@@ -54,6 +60,19 @@ export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: Edi
     });
   }, [panel, autocompleteEnabled]);
 
+  // Always-on semantic variable highlighting on the template panel. The env reads
+  // live store state lazily; deps trigger a recompute when known names may change.
+  const variableHighlight = useMemo(() => {
+    if (panel !== "template") return undefined;
+    return jinjaVariableHighlight({
+      getData: () => useStore.getState().data,
+      getDataFormat: () => useStore.getState().dataFormat,
+      getRenderMode: () => useStore.getState().renderMode,
+      getCapabilities: () => useStore.getState().capabilities,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel, data, dataFormat, renderMode, capabilities]);
+
   return (
     <div className="editor">
       <div className="panel-header">
@@ -71,6 +90,7 @@ export function Editor({ label, panel, value, onChange, onBlur, ariaLabel }: Edi
           onBlur={onBlur}
           language={language}
           extraExtensions={extraExtensions}
+          variableHighlight={variableHighlight}
           showLines={view.showLines}
           showWhitespaces={view.showWhitespaces}
           readOnlyPrefix={directive}
