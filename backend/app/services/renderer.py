@@ -94,17 +94,43 @@ def _prepare_context(data: Any, render_mode: str) -> tuple[dict[str, Any], list[
 _MP_CTX = mp.get_context("spawn")
 
 
+def _render_bounded(tmpl: Any, context: dict[str, Any], max_output: int) -> str:
+    """Render, streaming node output so we can stop once the size cap is hit.
+
+    ``tmpl.generate`` yields output incrementally, so a loop-heavy template that
+    would produce hundreds of MB is stopped near the limit instead of building
+    the whole string first. (A single huge expression, e.g. ``'x' * 10**9``, is
+    still built by Jinja before it is yielded; the wall-clock timeout bounds
+    that case.) The limit is measured in characters, which is <= the UTF-8 byte
+    size, so it is a safe upper bound on the serialized response.
+    """
+    if not max_output or max_output <= 0:
+        return tmpl.render(**context)
+    parts: list[str] = []
+    total = 0
+    for chunk in tmpl.generate(**context):
+        total += len(chunk)
+        if total > max_output:
+            raise RenderError(
+                "output_limit_error",
+                f"Rendered output exceeds the maximum size of {max_output} characters.",
+            )
+        parts.append(chunk)
+    return "".join(parts)
+
+
 def _do_render(
     template: str,
     context: dict[str, Any],
     options: RenderOptions,
     render_mode: str,
+    max_output: int,
 ) -> dict[str, Any]:
     """Render and return a serializable outcome dict (no exceptions escape)."""
     try:
         env = build_environment(options, render_mode)
         tmpl = env.from_string(template)
-        return {"result": tmpl.render(**context)}
+        return {"result": _render_bounded(tmpl, context, max_output)}
     except RenderError as exc:  # raised by custom filters / build_environment
         return {"error": exc.to_dict()}
     except Exception as exc:  # noqa: BLE001 - mapped to taxonomy
@@ -122,8 +148,8 @@ def _worker_loop(req_q: Any, res_q: Any) -> None:
         job = req_q.get()
         if job is None:
             return
-        job_id, template, context, options, render_mode = job
-        outcome = _do_render(template, context, options, render_mode)
+        job_id, template, context, options, render_mode, max_output = job
+        outcome = _do_render(template, context, options, render_mode, max_output)
         res_q.put((job_id, outcome))
 
 
@@ -219,6 +245,7 @@ class RenderPool:
         render_mode: str,
         *,
         timeout: float,
+        max_output: int = 0,
     ) -> str:
         worker = self._idle.get()  # block until a worker is free
         if not worker.is_alive():
@@ -230,7 +257,9 @@ class RenderPool:
 
         timed_out = False
         try:
-            worker.req_q.put((job_id, template, context, options, render_mode))
+            worker.req_q.put(
+                (job_id, template, context, options, render_mode, max_output)
+            )
             try:
                 got_id, outcome = worker.res_q.get(timeout=timeout)
             except queue_mod.Empty:
@@ -297,6 +326,11 @@ def render_template(
     """
     context, warnings = _prepare_context(data, render_mode)
     rendered = get_pool().run(
-        template, context, options, render_mode, timeout=timeout
+        template,
+        context,
+        options,
+        render_mode,
+        timeout=timeout,
+        max_output=get_settings().max_output_bytes,
     )
     return RenderResult(rendered=rendered, warnings=warnings)

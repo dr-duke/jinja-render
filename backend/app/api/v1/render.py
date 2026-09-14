@@ -30,7 +30,11 @@ def render(req: RenderRequest, request: Request) -> RenderResponse:
     )
 
     data_parsed, detected = parse_data(req.data, req.data_format)
-    check_data_depth(data_parsed, max_depth=settings.max_data_depth)
+    check_data_depth(
+        data_parsed,
+        max_depth=settings.max_data_depth,
+        max_nodes=settings.max_data_nodes,
+    )
 
     options = RenderOptions(
         trim=req.options.trim,

@@ -212,6 +212,11 @@ function writePersisted(s: WorkbenchState): void {
   }
 }
 
+// Monotonic token to guard against out-of-order render responses: with
+// auto-render, a slow earlier request could otherwise resolve after (and clobber)
+// a newer one. Only the latest in-flight render is allowed to write results.
+let renderToken = 0;
+
 const persistedDefaults = loadPersisted();
 // Whether we restored a saved workspace. When false, loadServerData seeds the
 // editors from the first server example (instead of a hardcoded default).
@@ -299,6 +304,7 @@ export const useStore = create<WorkbenchState>((set, get) => ({
 
   render: async () => {
     const { template, data, dataFormat, renderMode, options } = get();
+    const token = ++renderToken;
     set({ status: "loading" });
     try {
       const result = await renderTemplate({
@@ -308,6 +314,8 @@ export const useStore = create<WorkbenchState>((set, get) => ({
         render_mode: renderMode,
         options,
       });
+      // A newer render started while this one was in flight: drop this result.
+      if (token !== renderToken) return;
       if (result.success) {
         // Keep last successful render visible; only clear prior error.
         set({ status: "success", lastSuccess: result, lastError: null });
@@ -315,6 +323,7 @@ export const useStore = create<WorkbenchState>((set, get) => ({
         set({ status: "error", lastError: result });
       }
     } catch (e) {
+      if (token !== renderToken) return;
       set({
         status: "error",
         lastError: {

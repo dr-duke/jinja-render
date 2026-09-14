@@ -19,16 +19,21 @@ from ...core.errors import RenderError
 
 
 def _to_text(value: Any) -> str:
-    """Deterministically normalize any value to a string for hashing."""
+    """Deterministically normalize any value to a string for hashing.
+
+    Scalars use ``str(value)`` to match Ansible's ``hash`` filter, which hashes
+    ``to_bytes(str(data))`` — so ``hash(True)`` hashes ``"True"`` (not ``"true"``)
+    and ``hash(123)`` hashes ``"123"``. dict/list inputs (which have no stable
+    ``str`` form) use a canonical JSON form instead, a deliberate divergence for
+    reproducibility.
+    """
     if isinstance(value, str):
         return value
     if isinstance(value, (bytes, bytearray)):
         return bytes(value).decode("utf-8", errors="replace")
-    if isinstance(value, bool):
-        return "true" if value else "false"
     if value is None:
         return ""
-    if isinstance(value, (int, float)):
+    if isinstance(value, (bool, int, float)):
         return str(value)
     # dict/list and other structures: stable JSON form.
     return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)

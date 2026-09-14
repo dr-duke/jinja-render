@@ -13,10 +13,17 @@ RUN npm run build && test -f dist/index.html
 # --- Stage 2: Python runtime that serves API + built SPA ---------------------
 FROM python:3.12-slim
 
+# Single source of the running version. CI passes the pushed git tag here
+# (see .github/workflows/docker-publish.yml); it flows into JR_version, which is
+# what GET /api/v1/info and the OpenAPI schema report. Defaults to 0.0.0 for
+# plain local builds.
+ARG APP_VERSION=0.0.0
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     JR_DEBUG=false \
-    JR_STATIC_DIR=/app/static
+    JR_STATIC_DIR=/app/static \
+    JR_version=${APP_VERSION}
 
 WORKDIR /app
 

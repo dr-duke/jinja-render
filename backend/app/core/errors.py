@@ -11,6 +11,7 @@ ERROR_STATUS: dict[str, int] = {
     "undefined_error": 400,
     "unsupported_filter_error": 400,
     "timeout_error": 504,
+    "output_limit_error": 413,
     "rate_limit_error": 429,
     "internal_error": 500,
 }

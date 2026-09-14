@@ -23,6 +23,12 @@ def parse_json(data: str) -> Any:
             line=exc.lineno,
             column=exc.colno,
         ) from exc
+    except RecursionError as exc:
+        # Excessively nested JSON overflows the parser's C recursion limit.
+        raise RenderError(
+            "parse_error",
+            "Invalid JSON: structure is too deeply nested.",
+        ) from exc
 
 
 def parse_yaml(data: str) -> Any:
@@ -39,6 +45,12 @@ def parse_yaml(data: str) -> Any:
             f"Invalid YAML: {getattr(exc, 'problem', None) or str(exc)}",
             line=line,
             column=column,
+        ) from exc
+    except RecursionError as exc:
+        # Excessively nested YAML overflows the constructor's recursion limit.
+        raise RenderError(
+            "parse_error",
+            "Invalid YAML: structure is too deeply nested.",
         ) from exc
 
 
@@ -57,8 +69,15 @@ def parse_data(data: str, data_format: str) -> tuple[Any, str]:
     if data_format == "yaml":
         return parse_yaml(data), "yaml"
 
-    # auto: try JSON first, then fall back to YAML.
+    # auto: try JSON first, then fall back to YAML. RecursionError (very deeply
+    # nested input) is not a "this isn't JSON" signal, so surface it as a clean
+    # parse_error rather than silently retrying as YAML (which would also fail).
     try:
         return _normalize(json.loads(data)), "json"
     except json.JSONDecodeError:
         return parse_yaml(data), "yaml"
+    except RecursionError as exc:
+        raise RenderError(
+            "parse_error",
+            "Invalid data: structure is too deeply nested.",
+        ) from exc
