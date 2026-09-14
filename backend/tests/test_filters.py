@@ -57,3 +57,19 @@ def test_ipaddr_version():
 def test_ipaddr_list_filters_invalid():
     result = do_ipaddr(["192.0.2.1", "bad", "192.0.2.2"], "address")
     assert result == ["192.0.2.1", "192.0.2.2"]
+
+
+def test_hash_bool_matches_ansible_str_form():
+    # Ansible hashes str(value), so hash(True) hashes "True" (not "true").
+    assert do_hash(True) == hashlib.sha256(b"True").hexdigest()
+    assert do_hash(False) == hashlib.sha256(b"False").hexdigest()
+
+
+def test_to_yaml_uses_safe_dumper():
+    from app.services.ansible_filters.core import to_yaml
+
+    # Unrepresentable types must not leak python-specific !!python/... tags.
+    with pytest.raises(Exception):
+        to_yaml(range(3))
+    # Ordinary structures still serialize cleanly.
+    assert "a: 1" in to_yaml({"a": 1})

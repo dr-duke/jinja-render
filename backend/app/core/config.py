@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # `version` is the single source of truth for the running version; CI sets it
     # from the pushed git tag (e.g. JR_version=0.0.3). Default tracks the current
     # release.
-    version: str = "0.0.2"
+    version: str = "0.0.3"
     description: str = (
         "A safe, local-first Jinja2 playground: render templates against "
         "YAML/JSON data with structured diagnostics."
@@ -34,6 +34,16 @@ class Settings(BaseSettings):
     max_template_bytes: int = 512 * 1024  # 512 KB
     max_data_bytes: int = 1024 * 1024  # 1 MB
     max_data_depth: int = 50
+    # Total node-visit budget when validating parsed data. Unlike max_data_bytes
+    # (which bounds the *input* text), this bounds how large the parsed structure
+    # is when fully traversed, catching YAML alias/anchor "billion laughs" bombs:
+    # a few hundred input bytes can expand to a structure with billions of nodes
+    # via shared references. The depth check and response serialization both
+    # traverse the structure, so an unbounded expansion is a CPU/memory DoS.
+    max_data_nodes: int = 2_000_000
+    # Maximum size (in characters) of a single rendered output. Bounds the
+    # response body and the memory a loop-heavy template can accumulate.
+    max_output_bytes: int = 5 * 1024 * 1024  # ~5 MB
 
     # Rendering / worker pool.
     render_timeout_seconds: float = 2.0
@@ -43,6 +53,23 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_requests_per_minute: int = 120
     rate_limit_burst: int = 40
+    # Cap on the number of distinct client buckets kept in memory. Without this,
+    # a client spoofing X-Forwarded-For could grow the map without bound. When
+    # exceeded, fully-refilled (no longer limited) buckets are evicted first.
+    rate_limit_max_buckets: int = 10_000
+    # Number of trusted reverse proxies in front of the app. The client IP for
+    # rate limiting is taken this many hops from the right of X-Forwarded-For, so
+    # a client cannot spoof its identity by prepending fake entries. Set to the
+    # actual number of proxies (e.g. 1 for a single ingress). 0 disables XFF
+    # trust entirely and uses the direct connection address.
+    trusted_proxy_hops: int = 1
+
+    # Security response headers (defense-in-depth for the served SPA + API).
+    security_headers_enabled: bool = True
+    # Optional Content-Security-Policy header value. Empty = not sent. A known
+    # compatible policy for the bundled SPA is documented in the README and k8s
+    # ConfigMap; it is left opt-in so it can be validated against your build.
+    content_security_policy: str = ""
 
     # ansible hostfacts emulation (deterministic, never reads real host facts).
     ansible_facts_enabled: bool = True

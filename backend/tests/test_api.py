@@ -182,3 +182,55 @@ def test_rate_limit_returns_429(rate_limited_client):
     if resp.status_code == 429:
         assert resp.json()["error"]["type"] == "rate_limit_error"
         assert "Retry-After" in resp.headers
+
+
+def test_render_alias_bomb_is_validation_error(client):
+    # A tiny YAML that expands exponentially via anchors/aliases must be rejected
+    # with a clean 422, not a 500 or a hang.
+    lines = ["a0: &a0 [x, x, x, x, x, x, x, x, x, x]"]
+    for i in range(1, 9):
+        refs = ", ".join([f"*a{i - 1}"] * 10)
+        lines.append(f"a{i}: &a{i} [{refs}]")
+    bomb = "\n".join(lines) + "\n"
+    resp = _render(client, template="{{ a0 }}", data=bomb, data_format="yaml")
+    assert resp.status_code == 422
+    assert resp.json()["error"]["type"] == "validation_error"
+
+
+def test_render_deeply_nested_data_is_clean_error(client):
+    # Deeply nested input must yield a clean 4xx, never a 500 from a
+    # RecursionError bubbling up. JSON parses then trips the depth guard (422);
+    # YAML overflows the constructor and trips the parser (400).
+    deep = "[" * 6000 + "]" * 6000
+    resp = _render(client, template="x", data=deep, data_format="json")
+    assert resp.status_code == 422
+    assert resp.json()["error"]["type"] == "validation_error"
+
+    resp = _render(client, template="x", data=deep, data_format="yaml")
+    assert resp.status_code == 400
+    assert resp.json()["error"]["type"] == "parse_error"
+
+
+def test_security_headers_present(client):
+    resp = _render(client)
+    assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+    assert resp.headers.get("X-Frame-Options") == "DENY"
+
+
+def test_output_limit_returns_413(client, monkeypatch):
+    # Shrink the output cap so a modest template trips it, and confirm the API
+    # surfaces it as 413 output_limit_error.
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("JR_max_output_bytes", "1000")
+    get_settings.cache_clear()
+    try:
+        resp = _render(
+            client,
+            template="{% for i in range(100000) %}xxxxxxxxxx{% endfor %}",
+            data="{}",
+        )
+        assert resp.status_code == 413
+        assert resp.json()["error"]["type"] == "output_limit_error"
+    finally:
+        get_settings.cache_clear()

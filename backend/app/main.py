@@ -49,6 +49,7 @@ def create_app() -> FastAPI:
     rate_limiter = TokenBucketRateLimiter(
         requests_per_minute=settings.rate_limit_requests_per_minute,
         burst=settings.rate_limit_burst,
+        max_buckets=settings.rate_limit_max_buckets,
     )
 
     app.add_middleware(
@@ -61,7 +62,9 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def rate_limit(request: Request, call_next):  # type: ignore[no-untyped-def]
         if settings.rate_limit_enabled and request.url.path.startswith(API_PREFIX):
-            allowed, retry_after = rate_limiter.check(client_key(request))
+            allowed, retry_after = rate_limiter.check(
+                client_key(request, trusted_hops=settings.trusted_proxy_hops)
+            )
             if not allowed:
                 _error_counters["rate_limit_error"] = (
                     _error_counters.get("rate_limit_error", 0) + 1
@@ -92,6 +95,16 @@ def create_app() -> FastAPI:
             _metrics["render_requests_total"] += 1
         response = await call_next(request)
         response.headers["x-request-id"] = request.state.request_id
+        if settings.security_headers_enabled:
+            # Defense-in-depth headers for a tool that reflects untrusted template
+            # output. Cheap and broadly safe; the CSP is opt-in via config.
+            response.headers.setdefault("X-Content-Type-Options", "nosniff")
+            response.headers.setdefault("X-Frame-Options", "DENY")
+            response.headers.setdefault("Referrer-Policy", "no-referrer")
+            if settings.content_security_policy:
+                response.headers.setdefault(
+                    "Content-Security-Policy", settings.content_security_policy
+                )
         logger.info(
             "request",
             extra={

@@ -44,7 +44,24 @@ function knownRoots(env: CompletionEnv, docText: string): Set<string> {
   )) {
     roots.add(m[1]);
     if (m[2]) roots.add(m[2]);
+    // Inside a for-loop body `loop` is always defined (loop.index, ...).
+    roots.add("loop");
   }
+  // {% macro name(a, b=1) %} and {% call(a) name() %}: parameters are locals.
+  for (const m of docText.matchAll(/\{%-?\s*(?:macro\s+\w+|call)\s*\(([^)]*)\)/g)) {
+    for (const part of m[1].split(",")) {
+      const name = part.trim().match(/^([A-Za-z_]\w*)/);
+      if (name) roots.add(name[1]);
+    }
+  }
+  // {% with x = ..., y = ... %}: names introduced for the block scope.
+  for (const m of docText.matchAll(/\{%-?\s*with\b([^%]*)%\}/g)) {
+    for (const nm of m[1].matchAll(/([A-Za-z_]\w*)\s*=/g)) {
+      roots.add(nm[1]);
+    }
+  }
+  // `namespace()` is a Jinja built-in commonly assigned via {% set ns = namespace() %}.
+  roots.add("namespace");
 
   if (env.getRenderMode() === "ansible") {
     const caps = env.getCapabilities?.() ?? null;

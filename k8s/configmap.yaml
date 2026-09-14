@@ -13,6 +13,10 @@ data:
   JR_max_template_bytes: "524288"
   JR_max_data_bytes: "1048576"
   JR_max_data_depth: "50"
+  # Node-visit budget when validating parsed data (catches YAML alias bombs).
+  JR_max_data_nodes: "2000000"
+  # Max characters in a single rendered output; over this -> 413.
+  JR_max_output_bytes: "5242880"
   # Persistent render worker pool (no per-request spawn cold-start).
   JR_render_timeout_seconds: "2.0"
   JR_render_pool_size: "2"
@@ -20,6 +24,14 @@ data:
   JR_rate_limit_enabled: "true"
   JR_rate_limit_requests_per_minute: "120"
   JR_rate_limit_burst: "40"
+  # Bound tracked client buckets; take client IP this many hops from the right of
+  # X-Forwarded-For (set to the number of proxies in front of the app).
+  JR_rate_limit_max_buckets: "10000"
+  JR_trusted_proxy_hops: "1"
+  # Security response headers (nosniff / X-Frame-Options / Referrer-Policy).
+  JR_security_headers_enabled: "true"
+  # Optional CSP; validate against the build before enabling (see .env.example).
+  JR_content_security_policy: ""
   # Emulated, static ansible hostfacts (never reads real host facts).
   JR_ansible_facts_enabled: "true"
   JR_ansible_facts_default: "true"

@@ -43,13 +43,16 @@ def from_json(value: Any) -> Any:
 
 
 def to_yaml(value: Any, default_flow_style: bool | None = None, **kwargs: Any) -> str:
-    return yaml.dump(
+    # safe_dump (not dump): never emit python-specific ``!!python/...`` tags for
+    # exotic inputs; unrepresentable types raise cleanly instead, matching
+    # Ansible's SafeDumper-based behavior.
+    return yaml.safe_dump(
         value, allow_unicode=True, default_flow_style=default_flow_style, **kwargs
     )
 
 
 def to_nice_yaml(value: Any, indent: int = 4, **kwargs: Any) -> str:
-    return yaml.dump(
+    return yaml.safe_dump(
         value, indent=indent, allow_unicode=True, default_flow_style=False, **kwargs
     )
 

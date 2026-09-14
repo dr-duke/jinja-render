@@ -87,6 +87,38 @@ describe("template variable highlighting", () => {
     );
   });
 
+  it("treats the loop variable inside a for-body as known", async () => {
+    const el = await mountWith({
+      template: "{% for h in hosts %}{{ loop.index }}{% endfor %}",
+      data: "hosts:\n  - a\n",
+    });
+    await waitFor(() => expect(marks(el, "cm-jinja-var-known")).toContain("loop"));
+    expect(marks(el, "cm-jinja-var-unknown")).not.toContain("loop");
+  });
+
+  it("treats macro parameters as known in the macro body", async () => {
+    const el = await mountWith({
+      template: "{% macro row(host, port) %}{{ host }}:{{ port }}{% endmacro %}",
+      data: "",
+    });
+    await waitFor(() => {
+      const known = marks(el, "cm-jinja-var-known");
+      expect(known).toContain("host");
+      expect(known).toContain("port");
+    });
+    const unknown = marks(el, "cm-jinja-var-unknown");
+    expect(unknown).not.toContain("host");
+    expect(unknown).not.toContain("port");
+  });
+
+  it("treats {% with %} names as known", async () => {
+    const el = await mountWith({
+      template: "{% with x = 1 %}{{ x }}{% endwith %}",
+      data: "",
+    });
+    await waitFor(() => expect(marks(el, "cm-jinja-var-known")).toContain("x"));
+  });
+
   it("does not flag filter names or attributes as variables", async () => {
     const el = await mountWith({
       template: "{{ user.name | upper }}",
