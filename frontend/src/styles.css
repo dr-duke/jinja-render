@@ -315,6 +315,18 @@ select {
   color: var(--muted);
   line-height: 1.4;
 }
+.info-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-bottom: 10px;
+  color: var(--muted);
+}
+/* Keep each item (e.g. "version: 0.0.0-dev+abc1234") intact so a long version
+   string wraps to its own line instead of merging into the next label. */
+.info-meta span {
+  white-space: nowrap;
+}
 .info-link {
   color: var(--accent);
   text-decoration: none;
